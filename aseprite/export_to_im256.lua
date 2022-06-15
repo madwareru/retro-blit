@@ -39,12 +39,12 @@ if dlg.data.ok then
     local w = sprite.width
     local h = sprite.height
 
-    result_string = result_string .. string.char(0)
-    result_string = result_string .. string.char(ncolors)
-    result_string = result_string .. string.char((w / 256) % 256)
+    result_string = result_string .. string.char(ncolors % 256)
+    result_string = result_string .. string.char((ncolors / 256) % 256)
     result_string = result_string .. string.char(w % 256)
-    result_string = result_string .. string.char((h / 256) % 256)
+    result_string = result_string .. string.char((w / 256) % 256)
     result_string = result_string .. string.char(h % 256)
+    result_string = result_string .. string.char((h / 256) % 256)
 
     for i=0, ncolors-1 do
         local color = palette:getColor(i)
@@ -54,14 +54,13 @@ if dlg.data.ok then
     end
 
     for y = 0,h-1 do
-        result_string = result_string .. "    "
         for x = 0, w-1 do
             px = img:getPixel(x, y)
             result_string = result_string .. string.char(px)
         end
     end
 
-    local file = io.open (file_name , "wb+")
+    local file = io.open (file_name, "w+b")
     io.output(file)
     io.write(result_string)
     io.close(file)

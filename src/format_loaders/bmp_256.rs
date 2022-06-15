@@ -2,6 +2,7 @@ use std::io::{Read, Seek, SeekFrom};
 use std::ops::Deref;
 use bin_serialization_rs::{Endianness, Reflectable, SerializationReflector};
 use thiserror::Error;
+use crate::rendering::blittable::{SizedSurface};
 
 #[derive(Default, Debug, Clone)]
 struct RawBmpHeader {
@@ -110,10 +111,11 @@ pub enum BmpLoadingError {
 }
 
 pub struct Bmp {
-    pub width : u32,
-    pub height : u32,
-    pub palette: [u8; 256*3],
-    pub raw_data: Vec<u8>
+    width : u32,
+    height : u32,
+    palette: [u8; 256*3],
+    buffer: Vec<u8>,
+    color_key: Option<u8>
 }
 
 impl Bmp {
@@ -162,7 +164,8 @@ impl Bmp {
                                     width: width as _,
                                     height: width as _,
                                     palette,
-                                    raw_data: palette_indexes
+                                    buffer: palette_indexes,
+                                    color_key: None
                                 }
                             )
                         } else {
@@ -174,4 +177,22 @@ impl Bmp {
             }
         }
     }
+
+    pub fn get_palette_size(&self) -> usize { 256 }
+
+    pub fn get_palette(&self) -> &[u8] { &self.palette }
+
+    pub fn get_buffer(&self) -> &[u8] { &self.buffer }
+
+    pub fn get_buffer_mut(&mut self) -> &mut [u8] { &mut self.buffer }
+
+    pub fn set_color_key(&mut self, color_key: Option<u8>) {
+        self.color_key = color_key;
+    }
+}
+
+impl SizedSurface for Bmp {
+    fn get_width(&self) -> usize { self.width as _ }
+
+    fn get_height(&self) -> usize { self.height as _ }
 }

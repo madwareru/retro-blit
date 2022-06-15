@@ -2,9 +2,13 @@
 name = "retro-blit"
 version = "0.1.0"
 edition = "2018"
-description = "this is a library which let's you to make games in a feel of old dos games with a screen of 320x200 dimension and 256 colors"
+description = "A library which lets you make games in a feel of old dos games with a screen of 320x200 dimension and 256 colors"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 thiserror = "1.0.31"
+orom-miniquad = { git = "https://github.com/madwareru/orom-miniquad", version = "0.4.1" }
+bin-serialization-rs = { git = "https://github.com/madwareru/bin-serialization-rs", version = "0.1.6" }
+glam = "0.20.5"
+image = "0.24.2"

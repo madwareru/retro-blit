@@ -1,5 +1,6 @@
 use std::io::Read;
 use bin_serialization_rs::{Endianness, Reflectable, SerializationReflector};
+use crate::rendering::blittable::{SizedSurface};
 
 #[derive(Clone)]
 pub struct Image {
@@ -8,7 +9,8 @@ pub struct Image {
     width: u16,
     height: u16,
     palette: [u8; 256*3],
-    color_buffer: Vec<u8>
+    color_buffer: Vec<u8>,
+    color_key: Option<u8>
 }
 
 impl Default for Image {
@@ -21,7 +23,8 @@ impl Default for Image {
             width: Default::default(),
             height: Default::default(),
             palette: [0; 256*3],
-            color_buffer: Vec::new()
+            color_buffer: Vec::new(),
+            color_key: None
         }
     }
 }
@@ -52,14 +55,6 @@ impl Image {
         Image::deserialize(&mut source, Endianness::LittleEndian)
     }
 
-    pub fn get_width(&self) -> usize {
-        self.width as usize
-    }
-
-    pub fn get_height(&self) -> usize {
-        self.height as usize
-    }
-
     pub fn get_palette_size(&self) -> usize {
         self.palette_size as usize
     }
@@ -75,4 +70,14 @@ impl Image {
     pub fn get_buffer_mut(&mut self) -> &mut [u8] {
         &mut self.color_buffer
     }
+
+    pub fn set_color_key(&mut self, color_key: Option<u8>) {
+        self.color_key = color_key;
+    }
+}
+
+impl SizedSurface for Image {
+    fn get_width(&self) -> usize { self.width as _ }
+
+    fn get_height(&self) -> usize { self.height as _ }
 }
