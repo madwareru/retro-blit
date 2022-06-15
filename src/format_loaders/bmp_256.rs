@@ -3,6 +3,7 @@ use std::ops::Deref;
 use bin_serialization_rs::{Endianness, Reflectable, SerializationReflector};
 use thiserror::Error;
 use crate::rendering::blittable::{SizedSurface};
+use crate::rendering::BlittableSurface;
 
 #[derive(Default, Debug, Clone)]
 struct RawBmpHeader {
@@ -118,7 +119,7 @@ pub struct Bmp {
 }
 
 impl Bmp {
-    pub fn read_from<TStream: Read + Seek>(stream: &mut TStream) -> Result<(Vec<[u8; 3]>, Self), BmpLoadingError> {
+    pub fn read_from<TStream: Read + Seek>(stream: &mut TStream) -> Result<(Vec<[u8; 3]>, BlittableSurface), BmpLoadingError> {
         let raw_bmp = RawBmp::read_from(stream)?;
         match raw_bmp {
             None => Err(BmpLoadingError::FileTypeIsUnsupported),
@@ -157,12 +158,12 @@ impl Bmp {
                             Ok(
                                 (
                                     palette,
-                                    Self {
+                                    BlittableSurface::from(&Self {
                                         width: width as _,
                                         height: width as _,
                                         buffer: palette_indexes,
                                         color_key: None
-                                    }
+                                    })
                                 )
                             )
                         } else {

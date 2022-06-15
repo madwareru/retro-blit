@@ -1,6 +1,7 @@
 use std::io::Read;
 use bin_serialization_rs::{Endianness, Reflectable, SerializationReflector};
 use crate::rendering::blittable::{SizedSurface};
+use crate::rendering::BlittableSurface;
 
 #[derive(Clone)]
 pub struct Image {
@@ -51,22 +52,14 @@ impl Reflectable for Image {
 }
 
 impl Image {
-    pub fn load_from(mut source: impl Read) -> std::io::Result<(Vec<[u8; 3]>, Self)> {
+    pub fn load_from(mut source: impl Read) -> std::io::Result<(Vec<[u8; 3]>, BlittableSurface)> {
         let img = Image::deserialize(&mut source, Endianness::LittleEndian)?;
         let mut palette = Vec::with_capacity(img.palette_size as usize);
         for i in 0..img.palette_size as usize {
             let offset = i * 3;
             palette.push([img.palette[offset], img.palette[offset + 1], img.palette[offset + 2]]);
         }
-        Ok((palette, img))
-    }
-
-    pub fn get_palette_size(&self) -> usize {
-        self.palette_size as usize
-    }
-
-    pub fn get_palette(&self) -> &[u8] {
-        &self.palette
+        Ok((palette, BlittableSurface::from(&img)))
     }
 
     pub fn get_buffer(&self) -> &[u8] {

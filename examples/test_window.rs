@@ -32,13 +32,12 @@ struct MyGame {
 }
 impl MyGame {
     pub fn new() -> Self {
-        let (palette, pic) = retro_blit::format_loaders::im_256::Image::load_from(PICTURE_BYTES).unwrap();
-        let mut surface = BlittableSurface::from(&pic);
-        surface.set_color_key(Some(0));
+        let (palette, mut sprite_sheet) = retro_blit::format_loaders::im_256::Image::load_from(PICTURE_BYTES).unwrap();
+        sprite_sheet.set_color_key(Some(0));
         Self {
             offset: 0,
             palette,
-            sprite_sheet: surface,
+            sprite_sheet,
             level: [
                 [Tile::Water, Tile::Water, Tile::Water, Tile::Water, Tile::Water],
                 [Tile::Water, Tile::Water, Tile::Sand, Tile::Sand, Tile::Grass],
