@@ -16,18 +16,105 @@ pub trait SizedSurface {
     fn get_height(&self) -> usize;
 }
 
-pub trait Blittable<T> : SizedSurface {
-    fn blit_impl(&self, buffer: &mut [T], buffer_width: usize, self_rect: Rect, dst_rect: Rect, flip: Flip);
+pub trait BufferProvider<T: Copy> {
+    fn get_buffer(&self) -> & [T];
+}
+
+pub trait BufferProviderMut<T: Copy> {
+    fn get_buffer_mut(&mut self) -> &mut [T];
+}
+
+pub trait Blittable<T: Copy> : SizedSurface + BufferProvider<T> {
+    #[inline(always)]
+    fn blend_function(&self, dst: &mut T, src: &T) { *dst = *src; }
+
+    fn blit_impl(&self, buffer: &mut [T], buffer_width: usize, self_rect: Rect, dst_rect: Rect, flip: Flip) {
+        let src_rect = self_rect;
+        let dst_rect = dst_rect;
+        let span_length = (
+            src_rect.x_range.end - src_rect.x_range.start
+        ).min(
+            dst_rect.x_range.end - dst_rect.x_range.start
+        );
+        let span_count = (
+            src_rect.y_range.end - src_rect.y_range.start
+        ).min(
+            dst_rect.y_range.end - dst_rect.y_range.start
+        );
+        let width = self.get_width();
+        let mut src_stride = src_rect.y_range.start * width + src_rect.x_range.start;
+        let src_buffer = self.get_buffer();
+
+        let (flip_x, flip_y) = match flip {
+            Flip::None => (false, false),
+            Flip::X => (true, false),
+            Flip::Y => (false, true),
+            Flip::XY => (true, true)
+        };
+
+        if flip_y {
+            let mut dst_stride = (dst_rect.y_range.start + span_count - 1) * buffer_width + dst_rect.x_range.start;
+            if flip_x {
+                for _ in 0..span_count {
+                    let zipped = (&mut buffer[dst_stride..dst_stride+span_length])
+                        .iter_mut()
+                        .zip((&src_buffer[src_stride..src_stride+span_length]).iter().rev());
+                    for (dest, src) in zipped {
+                        self.blend_function(dest, src);
+                    }
+                    src_stride += width;
+                    dst_stride -= buffer_width;
+                }
+            } else {
+                for _ in 0..span_count {
+                    let zipped = (&mut buffer[dst_stride..dst_stride+span_length])
+                        .iter_mut()
+                        .zip(&src_buffer[src_stride..src_stride+span_length]);
+                    for (dest, src) in zipped {
+                        self.blend_function(dest, src);
+                    }
+                    src_stride += width;
+                    dst_stride -= buffer_width;
+                }
+            }
+        } else {
+            let mut dst_stride = dst_rect.y_range.start * buffer_width + dst_rect.x_range.start;
+            if flip_x {
+                for _ in 0..span_count {
+                    let zipped = (&mut buffer[dst_stride..dst_stride+span_length])
+                        .iter_mut()
+                        .zip((&src_buffer[src_stride..src_stride+span_length]).iter().rev());
+                    for (dest, src) in zipped {
+                        self.blend_function(dest, src);
+                    }
+                    src_stride += width;
+                    dst_stride += buffer_width;
+                }
+            } else {
+                for _ in 0..span_count {
+                    let zipped = (&mut buffer[dst_stride..dst_stride+span_length])
+                        .iter_mut()
+                        .zip(&src_buffer[src_stride..src_stride+span_length]);
+                    for (dest, src) in zipped {
+                        self.blend_function(dest, src);
+                    }
+                    src_stride += width;
+                    dst_stride += buffer_width;
+                }
+            }
+        }
+    }
 }
 
 #[derive(Copy, Clone)]
 pub enum Flip {
     None,
-    Horizontally,
-    Vertically
+    X,
+    Y,
+    XY
 }
 
-fn blit_ext<T, TBlittable: Blittable<T>>(
+fn blit_ext<T: Copy, TBlittable: Blittable<T>>(
     drawable: &TBlittable, buffer: &mut [T], buffer_width: usize,
     src_x: usize, src_y: usize,
     src_width: usize, src_height: usize,
@@ -65,30 +152,35 @@ fn blit_ext<T, TBlittable: Blittable<T>>(
             .min(dst_rect.y_range.end);
     }
 
-    match flip {
-        Flip::Horizontally => {
-            if src_x < src_rect.x_range.start {
-                let x_diff = src_width - src_rect.get_width();
-                src_rect.x_range.start -= x_diff;
-                src_rect.x_range.end -= x_diff;
-            } else if src_rect.get_width() > dst_rect.get_width() {
-                let x_diff = src_rect.get_width() - dst_rect.get_width();
-                src_rect.x_range.start += x_diff;
-                src_rect.x_range.end += x_diff;
-            }
+    let (flip_x, flip_y) = match flip {
+        Flip::None => (false, false),
+        Flip::X => (true, false),
+        Flip::Y => (false, true),
+        Flip::XY => (true, true)
+    };
+
+    if flip_x {
+        if src_x < src_rect.x_range.start {
+            let x_diff = src_width - src_rect.get_width();
+            src_rect.x_range.start -= x_diff;
+            src_rect.x_range.end -= x_diff;
+        } else if src_rect.get_width() > dst_rect.get_width() {
+            let x_diff = src_rect.get_width() - dst_rect.get_width();
+            src_rect.x_range.start += x_diff;
+            src_rect.x_range.end += x_diff;
         }
-        Flip::Vertically => {
-            if src_y < src_rect.y_range.start {
-                let y_diff = src_height - src_rect.get_height();
-                src_rect.y_range.start -= y_diff;
-                src_rect.y_range.end -= y_diff;
-            } else if src_rect.get_height() > dst_rect.get_height() {
-                let y_diff = src_rect.get_height() - dst_rect.get_height();
-                src_rect.y_range.start += y_diff;
-                src_rect.y_range.end += y_diff;
-            }
+    }
+
+    if flip_y {
+        if src_y < src_rect.y_range.start {
+            let y_diff = src_height - src_rect.get_height();
+            src_rect.y_range.start -= y_diff;
+            src_rect.y_range.end -= y_diff;
+        } else if src_rect.get_height() > dst_rect.get_height() {
+            let y_diff = src_rect.get_height() - dst_rect.get_height();
+            src_rect.y_range.start += y_diff;
+            src_rect.y_range.end += y_diff;
         }
-        _ => {}
     }
 
     drawable.blit_impl(
@@ -100,7 +192,7 @@ fn blit_ext<T, TBlittable: Blittable<T>>(
     )
 }
 
-pub struct BlitBuilder<'a, T, TBlittable: Blittable<T>> {
+pub struct BlitBuilder<'a, T: Copy, TBlittable: Blittable<T>> {
     drawable: &'a TBlittable,
     buffer: &'a mut [T],
     buffer_width: usize,
@@ -114,7 +206,7 @@ pub struct BlitBuilder<'a, T, TBlittable: Blittable<T>> {
     dst_height: usize,
     flip: Flip
 }
-impl<'a, T, TBlittable: Blittable<T>> BlitBuilder<'a, T, TBlittable> {
+impl<'a, T: Copy, TBlittable: Blittable<T>> BlitBuilder<'a, T, TBlittable> {
     pub fn create_ext(buffer: &'a mut [T], buffer_width: usize, drawable: &'a TBlittable) -> Self {
         let dst_height = buffer.len() / buffer_width;
         Self {
@@ -187,6 +279,13 @@ impl<'a, T, TBlittable: Blittable<T>> BlitBuilder<'a, T, TBlittable> {
     }
 }
 
-pub trait BlitDestination<'a, T, TBlittable: Blittable<T>> {
-    fn initiate_blit_on_self(&'a mut self, source_blittable: &'a TBlittable) -> BlitBuilder<'a, T, TBlittable>;
+pub trait BlitDestination<'a, T:Copy, TBlittable: Blittable<T>> : BufferProviderMut<T> + SizedSurface {
+    fn initiate_blit_on_self(&'a mut self, source_blittable: &'a TBlittable) -> BlitBuilder<'a, T, TBlittable> {
+        let width = self.get_width();
+        BlitBuilder::create_ext(
+            self.get_buffer_mut(),
+            width,
+            source_blittable
+        )
+    }
 }

@@ -2,6 +2,7 @@ use orom_miniquad::*;
 
 pub mod monitor_obj_loader;
 use monitor_obj_loader::Vec4;
+use crate::rendering::blittable::{BufferProviderMut, SizedSurface};
 
 const IMAGE_BYTES: &[u8] = include_bytes!("monitor_mask.png");
 
@@ -22,11 +23,21 @@ pub enum ScrollDirection {
     Backward
 }
 
-impl RetroBlitContext {
-    pub fn get_buffer_width(&self) -> usize { self.buffer_width }
-    pub fn get_buffer_height(&self) -> usize { self.buffer_height }
+impl SizedSurface for RetroBlitContext {
+    fn get_width(&self) -> usize {
+        self.buffer_width
+    }
 
-    pub fn get_buffer_mut(&mut self) -> &mut [u8] { &mut self.buffer_pixels }
+    fn get_height(&self) -> usize {
+        self.buffer_height
+    }
+}
+
+impl BufferProviderMut<u8> for RetroBlitContext  {
+    fn get_buffer_mut(&mut self) -> &mut [u8] { &mut self.buffer_pixels }
+}
+
+impl RetroBlitContext {
 
     pub fn clear(&mut self, color_idx: u8) {
         for pixel in self.buffer_pixels.iter_mut() {

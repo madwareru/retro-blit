@@ -32,8 +32,7 @@ struct MyGame {
 }
 impl MyGame {
     pub fn new() -> Self {
-        let (palette, mut sprite_sheet) = retro_blit::format_loaders::im_256::Image::load_from(PICTURE_BYTES).unwrap();
-        sprite_sheet.set_color_key(Some(0));
+        let (palette, sprite_sheet) = retro_blit::format_loaders::im_256::Image::load_from(PICTURE_BYTES).unwrap();
         Self {
             offset: 0,
             palette,
@@ -63,38 +62,44 @@ impl ContextHandler for MyGame {
     fn update(&mut self, data: &mut RetroBlitContext) {
         data.clear(1);
 
+        let sprite_sheet_with_color_key = self
+            .sprite_sheet
+            .with_color_key(0);
+
         for j in 0..5 {
             let y_coord = 44 + (j as i32) * 20;
             for i in 0..5 {
                 let x_coord = 100 + (i as i32) * 24;
                 let (tx, ty) = self.level[j][i].to_tile_coords();
-                BlitBuilder::create(data, &self.sprite_sheet)
+                BlitBuilder::create(data, &sprite_sheet_with_color_key)
                     .with_source_subrect(tx, ty, 24, 32)
                     .with_dest_pos(x_coord, y_coord)
                     .blit();
             }
         }
 
-        BlitBuilder::create(data, &self.sprite_sheet)
+        BlitBuilder::create(data, &sprite_sheet_with_color_key)
             .with_source_subrect(0, 0, 24, 20)
-            .with_dest_pos(-24 + (self.offset % 344), 100-30)
+            .with_dest_pos(-12, -10)
+            .with_flip(Flip::XY)
             .blit();
 
-        BlitBuilder::create(data, &self.sprite_sheet)
+        BlitBuilder::create(data, &sprite_sheet_with_color_key)
             .with_source_subrect(0, 0, 24, 20)
-            .with_dest_pos(320 - (self.offset % 344), 100+10)
-            .with_flip(Flip::Horizontally)
+            .with_dest_pos(-12, 200-10)
+            .with_flip(Flip::XY)
             .blit();
 
-        BlitBuilder::create(data, &self.sprite_sheet)
+        BlitBuilder::create(data, &sprite_sheet_with_color_key)
             .with_source_subrect(0, 0, 24, 20)
-            .with_dest_pos(160-36, -20 + (self.offset % 220))
+            .with_dest_pos(320-12, -10)
+            .with_flip(Flip::XY)
             .blit();
 
-        BlitBuilder::create(data, &self.sprite_sheet)
+        BlitBuilder::create(data, &sprite_sheet_with_color_key)
             .with_source_subrect(0, 0, 24, 20)
-            .with_dest_pos(160+12, 200 - (self.offset % 220))
-            .with_flip(Flip::Vertically)
+            .with_dest_pos(320-12, 200-10)
+            .with_flip(Flip::XY)
             .blit();
 
         self.offset += 1;
