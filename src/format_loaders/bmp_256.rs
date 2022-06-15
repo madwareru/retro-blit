@@ -113,13 +113,12 @@ pub enum BmpLoadingError {
 pub struct Bmp {
     width : u32,
     height : u32,
-    palette: [u8; 256*3],
     buffer: Vec<u8>,
     color_key: Option<u8>
 }
 
 impl Bmp {
-    pub fn read_from<TStream: Read + Seek>(stream: &mut TStream) -> Result<Self, BmpLoadingError> {
+    pub fn read_from<TStream: Read + Seek>(stream: &mut TStream) -> Result<(Vec<[u8; 3]>, Self), BmpLoadingError> {
         let raw_bmp = RawBmp::read_from(stream)?;
         match raw_bmp {
             None => Err(BmpLoadingError::FileTypeIsUnsupported),
@@ -147,26 +146,24 @@ impl Bmp {
                             if d_offset >= slide { d_offset -= slide; }
                         }
                         if let Some(pal) = bmp.palette {
-                            let mut palette = [0u8; 256*3];
-                            let mut offset = 0;
+                            let mut palette = Vec::with_capacity(pal.len());
                             for entry in pal.iter() {
                                 let mut clr = *entry;
                                 let b = clr & 0xFF; clr = clr / 0x100;
                                 let g = clr & 0xFF; clr = clr / 0x100;
                                 let r = clr & 0xFF;
-
-                                palette[offset] = r as u8; offset += 1;
-                                palette[offset] = g as u8; offset += 1;
-                                palette[offset] = b as u8; offset += 1;
+                                palette.push([r as u8, g as u8, b as u8]);
                             }
                             Ok(
-                                Self {
-                                    width: width as _,
-                                    height: width as _,
+                                (
                                     palette,
-                                    buffer: palette_indexes,
-                                    color_key: None
-                                }
+                                    Self {
+                                        width: width as _,
+                                        height: width as _,
+                                        buffer: palette_indexes,
+                                        color_key: None
+                                    }
+                                )
                             )
                         } else {
                             Err(BmpLoadingError::FileTypeIsUnsupported)
@@ -177,10 +174,6 @@ impl Bmp {
             }
         }
     }
-
-    pub fn get_palette_size(&self) -> usize { 256 }
-
-    pub fn get_palette(&self) -> &[u8] { &self.palette }
 
     pub fn get_buffer(&self) -> &[u8] { &self.buffer }
 

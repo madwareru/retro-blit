@@ -1,6 +1,6 @@
 use retro_blit::rendering::blittable::{BlitBuilder, Flip};
 use retro_blit::rendering::BlittableSurface;
-use retro_blit::window::{ContextData, ContextHandler, WindowMode};
+use retro_blit::window::{RetroBlitContext, ContextHandler, WindowMode};
 
 const PICTURE_BYTES: &[u8] = include_bytes!("spritesheet.im256");
 
@@ -26,19 +26,19 @@ impl Tile {
 
 struct MyGame {
     offset: i32,
-    pic: retro_blit::format_loaders::im_256::Image,
-    surface: BlittableSurface,
+    palette: Vec<[u8; 3]>,
+    sprite_sheet: BlittableSurface,
     level: [[Tile; 5]; 5]
 }
 impl MyGame {
     pub fn new() -> Self {
-        let pic = retro_blit::format_loaders::im_256::Image::load_from(PICTURE_BYTES).unwrap();
+        let (palette, pic) = retro_blit::format_loaders::im_256::Image::load_from(PICTURE_BYTES).unwrap();
         let mut surface = BlittableSurface::from(&pic);
         surface.set_color_key(Some(0));
         Self {
             offset: 0,
-            pic,
-            surface,
+            palette,
+            sprite_sheet: surface,
             level: [
                 [Tile::Water, Tile::Water, Tile::Water, Tile::Water, Tile::Water],
                 [Tile::Water, Tile::Water, Tile::Sand, Tile::Sand, Tile::Grass],
@@ -55,13 +55,13 @@ impl ContextHandler for MyGame {
         WindowMode::Mode13
     }
 
-    fn init(&mut self, data: &mut ContextData) {
-        for (d, s) in data.colors.iter_mut().zip(self.pic.get_palette().iter()) {
-            *d = *s;
+    fn init(&mut self, data: &mut RetroBlitContext) {
+        for i in 0..self.palette.len() {
+            data.set_palette(i as _, self.palette[i]);
         }
     }
 
-    fn update(&mut self, data: &mut ContextData) {
+    fn update(&mut self, data: &mut RetroBlitContext) {
         data.clear(1);
 
         for j in 0..5 {
@@ -69,30 +69,30 @@ impl ContextHandler for MyGame {
             for i in 0..5 {
                 let x_coord = 100 + (i as i32) * 24;
                 let (tx, ty) = self.level[j][i].to_tile_coords();
-                BlitBuilder::create(data, &self.surface)
+                BlitBuilder::create(data, &self.sprite_sheet)
                     .with_source_subrect(tx, ty, 24, 32)
                     .with_dest_pos(x_coord, y_coord)
                     .blit();
             }
         }
 
-        BlitBuilder::create(data, &self.surface)
+        BlitBuilder::create(data, &self.sprite_sheet)
             .with_source_subrect(0, 0, 24, 20)
             .with_dest_pos(-24 + (self.offset % 344), 100-30)
             .blit();
 
-        BlitBuilder::create(data, &self.surface)
+        BlitBuilder::create(data, &self.sprite_sheet)
             .with_source_subrect(0, 0, 24, 20)
             .with_dest_pos(320 - (self.offset % 344), 100+10)
             .with_flip(Flip::Horizontally)
             .blit();
 
-        BlitBuilder::create(data, &self.surface)
+        BlitBuilder::create(data, &self.sprite_sheet)
             .with_source_subrect(0, 0, 24, 20)
             .with_dest_pos(160-36, -20 + (self.offset % 220))
             .blit();
 
-        BlitBuilder::create(data, &self.surface)
+        BlitBuilder::create(data, &self.sprite_sheet)
             .with_source_subrect(0, 0, 24, 20)
             .with_dest_pos(160+12, 200 - (self.offset % 220))
             .with_flip(Flip::Vertically)

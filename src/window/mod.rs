@@ -5,11 +5,11 @@ use monitor_obj_loader::Vec4;
 
 const IMAGE_BYTES: &[u8] = include_bytes!("monitor_mask.png");
 
-pub struct ContextData {
+pub struct RetroBlitContext {
     buffer_width: usize,
     buffer_height: usize,
-    pub buffer_pixels: Vec<u8>,
-    pub colors: [u8; 256 * 3]
+    colors: [u8; 256 * 3],
+    buffer_pixels: Vec<u8>
 }
 
 pub enum ScrollKind {
@@ -22,9 +22,11 @@ pub enum ScrollDirection {
     Backward
 }
 
-impl ContextData {
+impl RetroBlitContext {
     pub fn get_buffer_width(&self) -> usize { self.buffer_width }
     pub fn get_buffer_height(&self) -> usize { self.buffer_height }
+
+    pub fn get_buffer_mut(&mut self) -> &mut [u8] { &mut self.buffer_pixels }
 
     pub fn clear(&mut self, color_idx: u8) {
         for pixel in self.buffer_pixels.iter_mut() {
@@ -74,8 +76,8 @@ impl ContextData {
 
 pub trait ContextHandler {
     fn get_window_mode(&self) -> WindowMode;
-    fn init(&mut self, data: &mut ContextData);
-    fn update(&mut self, data: &mut ContextData);
+    fn init(&mut self, ctx: &mut RetroBlitContext);
+    fn update(&mut self, ctx: &mut RetroBlitContext);
 }
 
 fn get_buffer_dimensions(handler: &impl ContextHandler) -> (usize, usize) {
@@ -83,6 +85,8 @@ fn get_buffer_dimensions(handler: &impl ContextHandler) -> (usize, usize) {
 }
 
 pub struct Stage<CtxHandler: ContextHandler> {
+    mask_vertices_count: usize,
+    screen_vertices_count: usize,
     mask_pipeline: Pipeline,
     mask_binding: Bindings,
     screen_pipeline: Pipeline,
@@ -90,7 +94,7 @@ pub struct Stage<CtxHandler: ContextHandler> {
     offscreen_pipeline: Pipeline,
     offscreen_binding: Bindings,
     offscreen_pass: RenderPass,
-    context_data: ContextData,
+    context_data: RetroBlitContext,
     handler: CtxHandler,
     buffer_texture: Texture,
     colors_texture: Texture,
@@ -104,6 +108,9 @@ impl<CtxHandler: ContextHandler> Stage<CtxHandler> {
 
         let mut mask_mesh = monitor_models.get("mask").unwrap().clone();
         let mut screen_mesh = monitor_models.get("screen").unwrap().clone();
+
+        let mask_vertices_count = mask_mesh.vertices.len();
+        let screen_vertices_count = screen_mesh.vertices.len();
 
         for v in mask_mesh.vertices.iter_mut() {
             let Vec4 { x, z, .. } = v.position;
@@ -218,7 +225,7 @@ impl<CtxHandler: ContextHandler> Stage<CtxHandler> {
 
         let (buffer_width, buffer_height) = get_buffer_dimensions(&handler);
 
-        let mut context_data = ContextData {
+        let mut context_data = RetroBlitContext {
             buffer_width,
             buffer_height,
             buffer_pixels: vec![0u8; buffer_width * buffer_height],
@@ -340,6 +347,8 @@ impl<CtxHandler: ContextHandler> Stage<CtxHandler> {
         );
 
         Self {
+            mask_vertices_count,
+            screen_vertices_count,
             mask_pipeline,
             mask_binding,
             screen_pipeline,
@@ -383,14 +392,14 @@ impl<CtxHandler: ContextHandler> EventHandler for Stage<CtxHandler> {
             ctx.apply_pipeline(&self.screen_pipeline);
             ctx.apply_bindings(&self.screen_binding);
             ctx.apply_uniforms(&screen_shader::Uniforms{ aspect });
-            ctx.draw(0, 1536, 1);
+            ctx.draw(0, self.screen_vertices_count as _, 1);
         }
 
         { // render a mask on the top of the screen
             ctx.apply_pipeline(&self.mask_pipeline);
             ctx.apply_bindings(&self.mask_binding);
             ctx.apply_uniforms(&mask_shader::Uniforms{ aspect });
-            ctx.draw(0, 48, 1);
+            ctx.draw(0, self.mask_vertices_count as _, 1);
         }
         ctx.end_render_pass();
 

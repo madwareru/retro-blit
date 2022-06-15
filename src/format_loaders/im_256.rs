@@ -15,7 +15,7 @@ pub struct Image {
 
 impl Default for Image {
     fn default() -> Self {
-        let _signature = (b'I' as u16) * 0x100 + b'M' as u16;
+        let _signature = b'I' as u16 + (b'M' as u16) * 0x100;
         let _nop = 0;
         Self {
             _signature,
@@ -51,8 +51,14 @@ impl Reflectable for Image {
 }
 
 impl Image {
-    pub fn load_from(mut source: impl Read) -> std::io::Result<Self> {
-        Image::deserialize(&mut source, Endianness::LittleEndian)
+    pub fn load_from(mut source: impl Read) -> std::io::Result<(Vec<[u8; 3]>, Self)> {
+        let img = Image::deserialize(&mut source, Endianness::LittleEndian)?;
+        let mut palette = Vec::with_capacity(img.palette_size as usize);
+        for i in 0..img.palette_size as usize {
+            let offset = i * 3;
+            palette.push([img.palette[offset], img.palette[offset + 1], img.palette[offset + 2]]);
+        }
+        Ok((palette, img))
     }
 
     pub fn get_palette_size(&self) -> usize {

@@ -178,11 +178,11 @@ impl<'a, TBlittable: Blittable<u8>> blittable::BlitDestination<'a, u8, TBlittabl
     }
 }
 
-impl<'a, TBlittable: Blittable<u8>> blittable::BlitDestination<'a, u8, TBlittable> for crate::window::ContextData {
+impl<'a, TBlittable: Blittable<u8>> blittable::BlitDestination<'a, u8, TBlittable> for crate::window::RetroBlitContext {
     fn initiate_blit_on_self(&'a mut self, source_blittable: &'a TBlittable) -> BlitBuilder<'a, u8, TBlittable> {
         let width = self.get_buffer_width();
         BlitBuilder::create_ext(
-            &mut self.buffer_pixels,
+            self.get_buffer_mut(),
             width,
             source_blittable
         )
