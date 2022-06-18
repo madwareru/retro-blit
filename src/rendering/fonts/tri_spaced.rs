@@ -112,8 +112,6 @@ macro_rules! impl_text_drawer {
                 let mut current_x = x;
                 for c in text.chars() {
                     if c.is_ascii_whitespace() {
-                        // just ignore any whitespace if it's not a ' '
-                        // for ' ', just increment x and continue for the next char
                         if c == ' ' {
                             current_x += self.font_info.glyph_grid_step_x as i32;
                         } else if c == '\n' {
@@ -175,7 +173,7 @@ macro_rules! impl_text_drawer {
 
                         if next_x > box_width {
                             if current_words == 0 {
-                                line_info_vec.push(LineInfo { word_count: 1, empty_space: box_width as i32 - current_x as i32 });
+                                line_info_vec.push(LineInfo { word_count: 1, empty_space: box_width as i32 - next_x as i32 });
                                 current_x = 0;
                             } else {
                                 line_info_vec.push(

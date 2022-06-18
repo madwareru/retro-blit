@@ -27,7 +27,7 @@ impl Tile {
 }
 
 struct MyGame {
-    offset: u8,
+    offset: usize,
     palette: Vec<[u8; 3]>,
     sprite_sheet: BlittableSurface,
     font: Font,
@@ -105,10 +105,10 @@ impl ContextHandler for MyGame {
             ctx,
             100, 50,
             120, 100,
-            HorizontalAlignment::Center,
-            VerticalAlignment::Center,
-            "Hello, world!",
-            Some(41)
+            HorizontalAlignment::Left,
+            VerticalAlignment::Top,
+            "Hello word.\nOops, a typo! We wanted to say a \"world\"!\n Please don't be too angry, will you?",
+            Some(40)
         );
 
         let (mouse_x, mouse_y) = ctx.get_mouse_pos();

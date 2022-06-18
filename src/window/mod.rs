@@ -482,7 +482,6 @@ impl<CtxHandler: ContextHandler> EventHandler for Stage<CtxHandler> {
 
 impl<CtxHandler: ContextHandler> Stage<CtxHandler> {
     fn check_for_hit_test(&mut self, x: f32, y: f32) {
-        let _sw = crate::utility::StopWatch::named("check_for_hit_test");
         let pt = vec3a(x, y, 0.0);
 
         let mut offset = 0;
