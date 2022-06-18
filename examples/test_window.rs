@@ -37,7 +37,7 @@ struct MyGame {
 impl MyGame {
     pub fn new() -> Self {
         let (palette, sprite_sheet) = retro_blit::format_loaders::im_256::Image::load_from(PICTURE_BYTES).unwrap();
-        let font = Font::default_font().unwrap();
+        let font = Font::default_font_small().unwrap();
         Self {
             offset: 0,
             palette,
@@ -103,7 +103,7 @@ impl ContextHandler for MyGame {
 
         self.font.draw_text_in_box(
             ctx,
-            100, 50,
+            0, 0,
             120, 100,
             HorizontalAlignment::Left,
             VerticalAlignment::Top,

@@ -6,6 +6,7 @@ use crate::rendering::fonts::font_align::{HorizontalAlignment, VerticalAlignment
 use crate::window::RetroBlitContext;
 
 const DEFAULT_TRISPACED_FONT_BYTES: &[u8] = include_bytes!("default_trispaced_font.im256");
+const DEFAULT_TRISPACED_FONT_SMALL_BYTES: &[u8] = include_bytes!("default_trispaced_font_small.im256");
 
 #[derive(Copy, Clone)]
 #[repr(usize)]
@@ -246,6 +247,499 @@ impl Font {
             surface,
             arena: bumpalo::Bump::new()
         }
+    }
+
+    pub fn default_font_small() -> std::io::Result<Self> {
+        let (_, surface) = crate::format_loaders::im_256::Image::load_from(DEFAULT_TRISPACED_FONT_SMALL_BYTES)?;
+        let font_info = FontInfo {
+            upper_cap_offset: 1,
+            base_line_offset: 9,
+            glyph_grid_step_x: 3,
+            glyph_grid_step_y: 12,
+            default_glyph_info: GlyphInfo {
+                x_offset: 14,
+                y_offset: 2,
+                width: GlyphWidth::Normal
+            },
+            font_mapping: hashmap!{
+                'a' => GlyphInfo {
+                    x_offset: 0,
+                    y_offset: 0,
+                    width: GlyphWidth::Normal
+                },
+                'b' => GlyphInfo {
+                    x_offset: 2,
+                    y_offset: 0,
+                    width: GlyphWidth::Normal
+                },
+                'c' => GlyphInfo {
+                    x_offset: 4,
+                    y_offset: 0,
+                    width: GlyphWidth::Normal
+                },
+                'd' => GlyphInfo {
+                    x_offset: 6,
+                    y_offset: 0,
+                    width: GlyphWidth::Normal
+                },
+                'e' => GlyphInfo {
+                    x_offset: 8,
+                    y_offset: 0,
+                    width: GlyphWidth::Normal
+                },
+                'f' => GlyphInfo {
+                    x_offset: 10,
+                    y_offset: 0,
+                    width: GlyphWidth::Normal
+                },
+                'g' => GlyphInfo {
+                    x_offset: 12,
+                    y_offset: 0,
+                    width: GlyphWidth::Normal
+                },
+                'h' => GlyphInfo {
+                    x_offset: 14,
+                    y_offset: 0,
+                    width: GlyphWidth::Normal
+                },
+                'i' => GlyphInfo {
+                    x_offset: 16,
+                    y_offset: 0,
+                    width: GlyphWidth::Narrow
+                },
+                'j' => GlyphInfo {
+                    x_offset: 17,
+                    y_offset: 0,
+                    width: GlyphWidth::Narrow
+                },
+                'k' => GlyphInfo {
+                    x_offset: 18,
+                    y_offset: 0,
+                    width: GlyphWidth::Normal
+                },
+                'l' => GlyphInfo {
+                    x_offset: 20,
+                    y_offset: 0,
+                    width: GlyphWidth::Narrow
+                },
+                'm' => GlyphInfo {
+                    x_offset: 21,
+                    y_offset: 0,
+                    width: GlyphWidth::Wide
+                },
+                'n' => GlyphInfo {
+                    x_offset: 24,
+                    y_offset: 0,
+                    width: GlyphWidth::Normal
+                },
+                'o' => GlyphInfo {
+                    x_offset: 26,
+                    y_offset: 0,
+                    width: GlyphWidth::Normal
+                },
+                'p' => GlyphInfo {
+                    x_offset: 28,
+                    y_offset: 0,
+                    width: GlyphWidth::Normal
+                },
+                'q' => GlyphInfo {
+                    x_offset: 30,
+                    y_offset: 0,
+                    width: GlyphWidth::Normal
+                },
+                'r' => GlyphInfo {
+                    x_offset: 32,
+                    y_offset: 0,
+                    width: GlyphWidth::Normal
+                },
+                's' => GlyphInfo {
+                    x_offset: 34,
+                    y_offset: 0,
+                    width: GlyphWidth::Normal
+                },
+                't' => GlyphInfo {
+                    x_offset: 36,
+                    y_offset: 0,
+                    width: GlyphWidth::Normal
+                },
+                'u' => GlyphInfo {
+                    x_offset: 38,
+                    y_offset: 0,
+                    width: GlyphWidth::Normal
+                },
+                'v' => GlyphInfo {
+                    x_offset: 40,
+                    y_offset: 0,
+                    width: GlyphWidth::Normal
+                },
+                'w' => GlyphInfo {
+                    x_offset: 42,
+                    y_offset: 0,
+                    width: GlyphWidth::Wide
+                },
+                'x' => GlyphInfo {
+                    x_offset: 45,
+                    y_offset: 0,
+                    width: GlyphWidth::Normal
+                },
+                'y' => GlyphInfo {
+                    x_offset: 47,
+                    y_offset: 0,
+                    width: GlyphWidth::Normal
+                },
+                'z' => GlyphInfo {
+                    x_offset: 49,
+                    y_offset: 0,
+                    width: GlyphWidth::Normal
+                },
+                '.' => GlyphInfo {
+                    x_offset: 51,
+                    y_offset: 0,
+                    width: GlyphWidth::Narrow
+                },
+                ',' => GlyphInfo {
+                    x_offset: 52,
+                    y_offset: 0,
+                    width: GlyphWidth::Narrow
+                },
+                ':' => GlyphInfo {
+                    x_offset: 53,
+                    y_offset: 0,
+                    width: GlyphWidth::Narrow
+                },
+                '!' => GlyphInfo {
+                    x_offset: 54,
+                    y_offset: 0,
+                    width: GlyphWidth::Narrow
+                },
+                ';' => GlyphInfo {
+                    x_offset: 55,
+                    y_offset: 0,
+                    width: GlyphWidth::Narrow
+                },
+                '"' => GlyphInfo {
+                    x_offset: 56,
+                    y_offset: 0,
+                    width: GlyphWidth::Narrow
+                },
+                '\'' => GlyphInfo {
+                    x_offset: 57,
+                    y_offset: 0,
+                    width: GlyphWidth::Narrow
+                },
+                '`' => GlyphInfo {
+                    x_offset: 58,
+                    y_offset: 0,
+                    width: GlyphWidth::Narrow
+                },
+                '(' => GlyphInfo {
+                    x_offset: 59,
+                    y_offset: 0,
+                    width: GlyphWidth::Normal
+                },
+                ')' => GlyphInfo {
+                    x_offset: 61,
+                    y_offset: 0,
+                    width: GlyphWidth::Normal
+                },
+                '|' => GlyphInfo {
+                    x_offset: 63,
+                    y_offset: 0,
+                    width: GlyphWidth::Normal
+                },
+                'A' => GlyphInfo {
+                    x_offset: 0,
+                    y_offset: 1,
+                    width: GlyphWidth::Normal
+                },
+                'B' => GlyphInfo {
+                    x_offset: 2,
+                    y_offset: 1,
+                    width: GlyphWidth::Normal
+                },
+                'C' => GlyphInfo {
+                    x_offset: 4,
+                    y_offset: 1,
+                    width: GlyphWidth::Normal
+                },
+                'D' => GlyphInfo {
+                    x_offset: 6,
+                    y_offset: 1,
+                    width: GlyphWidth::Normal
+                },
+                'E' => GlyphInfo {
+                    x_offset: 8,
+                    y_offset: 1,
+                    width: GlyphWidth::Normal
+                },
+                'F' => GlyphInfo {
+                    x_offset: 10,
+                    y_offset: 1,
+                    width: GlyphWidth::Normal
+                },
+                'G' => GlyphInfo {
+                    x_offset: 12,
+                    y_offset: 1,
+                    width: GlyphWidth::Normal
+                },
+                'H' => GlyphInfo {
+                    x_offset: 14,
+                    y_offset: 1,
+                    width: GlyphWidth::Normal
+                },
+                'I' => GlyphInfo {
+                    x_offset: 16,
+                    y_offset: 1,
+                    width: GlyphWidth::Normal
+                },
+                'J' => GlyphInfo {
+                    x_offset: 18,
+                    y_offset: 1,
+                    width: GlyphWidth::Normal
+                },
+                'K' => GlyphInfo {
+                    x_offset: 20,
+                    y_offset: 1,
+                    width: GlyphWidth::Normal
+                },
+                'L' => GlyphInfo {
+                    x_offset: 22,
+                    y_offset: 1,
+                    width: GlyphWidth::Normal
+                },
+                'M' => GlyphInfo {
+                    x_offset: 24,
+                    y_offset: 1,
+                    width: GlyphWidth::Wide
+                },
+                'N' => GlyphInfo {
+                    x_offset: 27,
+                    y_offset: 1,
+                    width: GlyphWidth::Normal
+                },
+                'O' => GlyphInfo {
+                    x_offset: 29,
+                    y_offset: 1,
+                    width: GlyphWidth::Normal
+                },
+                'P' => GlyphInfo {
+                    x_offset: 31,
+                    y_offset: 1,
+                    width: GlyphWidth::Normal
+                },
+                'Q' => GlyphInfo {
+                    x_offset: 33,
+                    y_offset: 1,
+                    width: GlyphWidth::Normal
+                },
+                'R' => GlyphInfo {
+                    x_offset: 35,
+                    y_offset: 1,
+                    width: GlyphWidth::Normal
+                },
+                'S' => GlyphInfo {
+                    x_offset: 37,
+                    y_offset: 1,
+                    width: GlyphWidth::Normal
+                },
+                'T' => GlyphInfo {
+                    x_offset: 39,
+                    y_offset: 1,
+                    width: GlyphWidth::Normal
+                },
+                'U' => GlyphInfo {
+                    x_offset: 41,
+                    y_offset: 1,
+                    width: GlyphWidth::Normal
+                },
+                'V' => GlyphInfo {
+                    x_offset: 43,
+                    y_offset: 1,
+                    width: GlyphWidth::Normal
+                },
+                'W' => GlyphInfo {
+                    x_offset: 45,
+                    y_offset: 1,
+                    width: GlyphWidth::Wide
+                },
+                'X' => GlyphInfo {
+                    x_offset: 48,
+                    y_offset: 1,
+                    width: GlyphWidth::Normal
+                },
+                'Y' => GlyphInfo {
+                    x_offset: 50,
+                    y_offset: 1,
+                    width: GlyphWidth::Normal
+                },
+                'Z' => GlyphInfo {
+                    x_offset: 52,
+                    y_offset: 1,
+                    width: GlyphWidth::Normal
+                },
+                '-' => GlyphInfo {
+                    x_offset: 54,
+                    y_offset: 1,
+                    width: GlyphWidth::Normal
+                },
+                '+' => GlyphInfo {
+                    x_offset: 56,
+                    y_offset: 1,
+                    width: GlyphWidth::Normal
+                },
+                '*' => GlyphInfo {
+                    x_offset: 58,
+                    y_offset: 1,
+                    width: GlyphWidth::Normal
+                },
+                '/' => GlyphInfo {
+                    x_offset: 60,
+                    y_offset: 1,
+                    width: GlyphWidth::Normal
+                },
+                '\\' => GlyphInfo {
+                    x_offset: 62,
+                    y_offset: 1,
+                    width: GlyphWidth::Normal
+                },
+                '0' => GlyphInfo {
+                    x_offset: 0,
+                    y_offset: 2,
+                    width: GlyphWidth::Normal
+                },
+                '1' => GlyphInfo {
+                    x_offset: 2,
+                    y_offset: 2,
+                    width: GlyphWidth::Normal
+                },
+                '2' => GlyphInfo {
+                    x_offset: 4,
+                    y_offset: 2,
+                    width: GlyphWidth::Normal
+                },
+                '3' => GlyphInfo {
+                    x_offset: 6,
+                    y_offset: 2,
+                    width: GlyphWidth::Normal
+                },
+                '4' => GlyphInfo {
+                    x_offset: 8,
+                    y_offset: 2,
+                    width: GlyphWidth::Normal
+                },
+                '5' => GlyphInfo {
+                    x_offset: 10,
+                    y_offset: 2,
+                    width: GlyphWidth::Normal
+                },
+                '6' => GlyphInfo {
+                    x_offset: 12,
+                    y_offset: 2,
+                    width: GlyphWidth::Normal
+                },
+                '7' => GlyphInfo {
+                    x_offset: 14,
+                    y_offset: 2,
+                    width: GlyphWidth::Normal
+                },
+                '8' => GlyphInfo {
+                    x_offset: 16,
+                    y_offset: 2,
+                    width: GlyphWidth::Normal
+                },
+                '9' => GlyphInfo {
+                    x_offset: 18,
+                    y_offset: 2,
+                    width: GlyphWidth::Normal
+                },
+                '[' => GlyphInfo {
+                    x_offset: 20,
+                    y_offset: 2,
+                    width: GlyphWidth::Normal
+                },
+                ']' => GlyphInfo {
+                    x_offset: 22,
+                    y_offset: 2,
+                    width: GlyphWidth::Normal
+                },
+                '{' => GlyphInfo {
+                    x_offset: 24,
+                    y_offset: 2,
+                    width: GlyphWidth::Normal
+                },
+                '}' => GlyphInfo {
+                    x_offset: 26,
+                    y_offset: 2,
+                    width: GlyphWidth::Normal
+                },
+                '>' => GlyphInfo {
+                    x_offset: 28,
+                    y_offset: 2,
+                    width: GlyphWidth::Normal
+                },
+                '<' => GlyphInfo {
+                    x_offset: 30,
+                    y_offset: 2,
+                    width: GlyphWidth::Normal
+                },
+                '~' => GlyphInfo {
+                    x_offset: 32,
+                    y_offset: 2,
+                    width: GlyphWidth::Normal
+                },
+                '=' => GlyphInfo {
+                    x_offset: 34,
+                    y_offset: 2,
+                    width: GlyphWidth::Normal
+                },
+                '%' => GlyphInfo {
+                    x_offset: 36,
+                    y_offset: 2,
+                    width: GlyphWidth::Normal
+                },
+                '@' => GlyphInfo {
+                    x_offset: 38,
+                    y_offset: 2,
+                    width: GlyphWidth::Normal
+                },
+                '&' => GlyphInfo {
+                    x_offset: 40,
+                    y_offset: 2,
+                    width: GlyphWidth::Normal
+                },
+                '_' => GlyphInfo {
+                    x_offset: 42,
+                    y_offset: 2,
+                    width: GlyphWidth::Normal
+                },
+                '#' => GlyphInfo {
+                    x_offset: 44,
+                    y_offset: 2,
+                    width: GlyphWidth::Normal
+                },
+                '$' => GlyphInfo {
+                    x_offset: 46,
+                    y_offset: 2,
+                    width: GlyphWidth::Normal
+                },
+                '№' => GlyphInfo {
+                    x_offset: 48,
+                    y_offset: 2,
+                    width: GlyphWidth::Wide
+                },
+                '?' => GlyphInfo {
+                    x_offset: 51,
+                    y_offset: 2,
+                    width: GlyphWidth::Normal
+                },
+                '^' => GlyphInfo {
+                    x_offset: 51,
+                    y_offset: 2,
+                    width: GlyphWidth::Normal
+                },
+            }
+        };
+        Ok(Self::new(font_info, surface))
     }
 
     pub fn default_font() -> std::io::Result<Self> {
