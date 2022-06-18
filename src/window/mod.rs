@@ -1,3 +1,4 @@
+use glam::{vec3a, Vec3A};
 use orom_miniquad::*;
 
 pub mod monitor_obj_loader;
@@ -10,7 +11,9 @@ pub struct RetroBlitContext {
     buffer_width: usize,
     buffer_height: usize,
     colors: [u8; 256 * 3],
-    buffer_pixels: Vec<u8>
+    buffer_pixels: Vec<u8>,
+    mouse_x: f32,
+    mouse_y: f32
 }
 
 pub enum ScrollKind {
@@ -43,6 +46,10 @@ impl RetroBlitContext {
         for pixel in self.buffer_pixels.iter_mut() {
             *pixel = color_idx;
         }
+    }
+
+    pub fn get_mouse_pos(&self) -> (f32, f32) {
+        (self.mouse_x, self.mouse_y)
     }
 
     pub fn get_palette(&self, index: u8) -> [u8; 3] {
@@ -86,7 +93,10 @@ impl RetroBlitContext {
 }
 
 pub trait ContextHandler {
+    fn get_window_title(&self) -> &'static str;
     fn get_window_mode(&self) -> WindowMode;
+    fn on_mouse_down(&mut self, ctx: &mut RetroBlitContext, button_number: u8);
+    fn on_mouse_up(&mut self, ctx: &mut RetroBlitContext, button_number: u8);
     fn init(&mut self, ctx: &mut RetroBlitContext);
     fn update(&mut self, ctx: &mut RetroBlitContext);
 }
@@ -100,6 +110,7 @@ pub struct Stage<CtxHandler: ContextHandler> {
     screen_vertices_count: usize,
     mask_pipeline: Pipeline,
     mask_binding: Bindings,
+    screen_mesh: monitor_obj_loader::Mesh,
     screen_pipeline: Pipeline,
     screen_binding: Bindings,
     offscreen_pipeline: Pipeline,
@@ -108,7 +119,7 @@ pub struct Stage<CtxHandler: ContextHandler> {
     context_data: RetroBlitContext,
     handler: CtxHandler,
     buffer_texture: Texture,
-    colors_texture: Texture,
+    colors_texture: Texture
 }
 
 impl<CtxHandler: ContextHandler> Stage<CtxHandler> {
@@ -123,6 +134,9 @@ impl<CtxHandler: ContextHandler> Stage<CtxHandler> {
         let mask_vertices_count = mask_mesh.vertices.len();
         let screen_vertices_count = screen_mesh.vertices.len();
 
+        let cs_t = (-0.0025f32).cos();
+        let sn_t = (-0.0025f32).sin();
+
         for v in mask_mesh.vertices.iter_mut() {
             let Vec4 { x, z, .. } = v.position;
             v.position.x = -z;
@@ -130,6 +144,13 @@ impl<CtxHandler: ContextHandler> Stage<CtxHandler> {
             v.position.x *= 0.75;
             v.position.y *= 0.75;
             v.position.z *= 0.75;
+
+            //we need to slightly rotate screen to align it with a screen
+            let x_new = v.position.x * cs_t - v.position.y * sn_t;
+            let y_new = v.position.x * sn_t + v.position.y * cs_t;
+
+            v.position.x = x_new;
+            v.position.y = y_new;
         }
 
         for v in screen_mesh.vertices.iter_mut() {
@@ -139,6 +160,14 @@ impl<CtxHandler: ContextHandler> Stage<CtxHandler> {
             v.position.x *= 0.75;
             v.position.y *= 0.75;
             v.position.z *= 0.75;
+
+            let d_x = v.uv.x - 0.5;
+            let d_y = v.uv.y - 0.5;
+            let curvature_x = (1.0 - d_x * d_x * 4.0 ) * d_y / 40.0;
+            let curvature_y = (1.0 - d_y * d_y * 4.0 ) * d_x / 40.0;
+
+            v.position.x += curvature_y;
+            v.position.y += curvature_x;
         }
 
         let mask_vertex_buffer = Buffer::immutable(
@@ -240,7 +269,9 @@ impl<CtxHandler: ContextHandler> Stage<CtxHandler> {
             buffer_width,
             buffer_height,
             buffer_pixels: vec![0u8; buffer_width * buffer_height],
-            colors: [0u8; 256 * 3]
+            colors: [0u8; 256 * 3],
+            mouse_x: 0.0,
+            mouse_y: 0.0
         };
 
         let mut handler = handler;
@@ -362,6 +393,7 @@ impl<CtxHandler: ContextHandler> Stage<CtxHandler> {
             screen_vertices_count,
             mask_pipeline,
             mask_binding,
+            screen_mesh,
             screen_pipeline,
             screen_binding,
             offscreen_pipeline,
@@ -370,7 +402,7 @@ impl<CtxHandler: ContextHandler> Stage<CtxHandler> {
             context_data,
             handler,
             buffer_texture,
-            colors_texture,
+            colors_texture
         }
     }
 }
@@ -415,6 +447,88 @@ impl<CtxHandler: ContextHandler> EventHandler for Stage<CtxHandler> {
         ctx.end_render_pass();
 
         ctx.commit_frame();
+    }
+
+    fn mouse_motion_event(&mut self, ctx: &mut Context, x: f32, y: f32) {
+        let screen_size = ctx.screen_size();
+        let aspect = screen_size.0 / screen_size.1;
+
+        let x = ((x / screen_size.0 - 0.5) * 2.0 * aspect).clamp(-1.0, 1.0);
+        let y = -((y / screen_size.1 - 0.5) * 2.0).clamp(-1.0, 1.0);
+
+        self.check_for_hit_test(x, y);
+    }
+
+    fn mouse_button_down_event(&mut self, ctx: &mut Context, button: MouseButton, x: f32, y: f32) {
+        self.mouse_motion_event(ctx, x, y);
+        match button {
+            MouseButton::Left => { self.handler.on_mouse_down(&mut self.context_data, 0); },
+            MouseButton::Middle => { self.handler.on_mouse_down(&mut self.context_data, 1); },
+            MouseButton::Right => { self.handler.on_mouse_down(&mut self.context_data, 2); },
+            _ => {}
+        }
+    }
+
+    fn mouse_button_up_event(&mut self, ctx: &mut Context, button: MouseButton, x: f32, y: f32) {
+        self.mouse_motion_event(ctx, x, y);
+        match button {
+            MouseButton::Left => { self.handler.on_mouse_up(&mut self.context_data, 0); },
+            MouseButton::Middle => { self.handler.on_mouse_up(&mut self.context_data, 1); },
+            MouseButton::Right => { self.handler.on_mouse_up(&mut self.context_data, 2); },
+            _ => {}
+        }
+    }
+}
+
+impl<CtxHandler: ContextHandler> Stage<CtxHandler> {
+    fn check_for_hit_test(&mut self, x: f32, y: f32) {
+        let _sw = crate::utility::StopWatch::named("check_for_hit_test");
+        let pt = vec3a(x, y, 0.0);
+
+        let mut offset = 0;
+        while offset < self.screen_mesh.indices.len() {
+            let vert0 = self.screen_mesh.vertices[self.screen_mesh.indices[offset] as usize];
+            let vert1 = self.screen_mesh.vertices[self.screen_mesh.indices[offset + 1] as usize];
+            let vert2 = self.screen_mesh.vertices[self.screen_mesh.indices[offset + 2] as usize];
+
+            let pt0 = vec3a(vert0.position.x, vert0.position.y, 0.0);
+            let pt1 = vec3a(vert1.position.x, vert1.position.y, 0.0);
+            let pt2 = vec3a(vert2.position.x, vert2.position.y, 0.0);
+
+            match hit_test(pt, pt0, pt1, pt2) {
+                None => {}
+                Some((bar_u, bar_v, bar_w)) => {
+                    let u = bar_u * vert0.uv.x + bar_v * vert1.uv.x + bar_w * vert2.uv.x;
+                    let v = 1.0 - (bar_u * vert0.uv.y + bar_v * vert1.uv.y + bar_w * vert2.uv.y);
+                    self.context_data.mouse_x = u * self.context_data.buffer_width as f32;
+                    self.context_data.mouse_y = v * self.context_data.buffer_height as f32;
+                    return;
+                }
+            }
+            offset += 3;
+        }
+    }
+}
+
+fn cross2(v0: Vec3A, v1: Vec3A) -> f32 {
+    v0.x * v1.y - v0.y * v1.x
+}
+
+fn hit_test(pt: Vec3A, pt0: Vec3A, pt1: Vec3A, pt2: Vec3A) -> Option<(f32, f32, f32)> {
+    let e0 = pt1 - pt0;
+    let e1 = pt2 - pt1;
+
+    let v0 = pt - pt0;
+    let v1 = pt - pt1;
+    let v2 = pt - pt2;
+
+    let a = cross2(e0, e1);
+    let (bar_u, bar_v) = (cross2(v1, v2) / a, cross2(v2, v0) / a);
+    let bar_w = 1.0 - bar_u - bar_v;
+    if (bar_u > 0.0) && (bar_v > 0.0) && (bar_w > 0.0) {
+        Some((bar_u, bar_v, bar_w))
+    } else {
+        None
     }
 }
 
@@ -510,11 +624,7 @@ mod screen_shader {
         uniform float aspect;
 
         void main() {
-            lowp float d_x = uv.x - 0.5;
-            lowp float d_y = uv.y - 0.5;
-            lowp float curvature_x = (1.0 - d_x * d_x * 4.0 ) * d_y / 50.0;
-            lowp float curvature_y = (1.0 - d_y * d_y * 4.0 ) * d_x / 40.0;
-            gl_Position = vec4((pos.x + curvature_y) * aspect, pos.y + curvature_x, pos.zw);
+            gl_Position = vec4(pos.x * aspect, pos.yzw);
             texcoord = vec2(uv.x, 1.0 - uv.y);
         }
     "#;
@@ -560,13 +670,13 @@ impl WindowMode {
 
 pub fn start<CtxHandler: 'static + ContextHandler>(handler: CtxHandler) {
     let conf = conf::Conf {
-        window_title: "kek".to_string(),
+        window_title: handler.get_window_title().to_string(),
         window_width: 1024,
         window_height: 1024,
         high_dpi: true,
         fullscreen: false,
         sample_count: 6,
-        window_resizable: false
+        window_resizable: true
     };
 
     orom_miniquad::start(conf, |mut ctx| {

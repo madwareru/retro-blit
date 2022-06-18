@@ -1,7 +1,8 @@
+pub mod blittable;
+pub mod fonts;
+
 use crate::format_loaders::bmp_256::Bmp;
 use crate::format_loaders::im_256::Image;
-
-pub mod blittable;
 use blittable::{BlitBuilder, Blittable, SizedSurface};
 use crate::rendering::blittable::{BufferProvider, BufferProviderMut};
 
@@ -25,6 +26,14 @@ impl BlittableSurface {
         ColorKeyWrapper{
             wrapped: self,
             color_key
+        }
+    }
+
+    pub fn with_color_key_blink(&self, color_key: u8, blink_color: u8) -> ColorKeyBlinkWrapper {
+        ColorKeyBlinkWrapper{
+            wrapped: self,
+            color_key,
+            blink_color
         }
     }
 }
@@ -92,6 +101,35 @@ impl Blittable<u8> for ColorKeyWrapper<'_> {
     #[inline(always)]
     fn blend_function(&self, dst: &mut u8, src: &u8) {
         *dst = if *src == self.color_key { *dst} else {*src};
+    }
+}
+
+pub struct ColorKeyBlinkWrapper<'a> {
+    wrapped: &'a BlittableSurface,
+    blink_color: u8,
+    color_key: u8
+}
+
+impl SizedSurface for ColorKeyBlinkWrapper<'_> {
+    fn get_width(&self) -> usize {
+        self.wrapped.get_width()
+    }
+
+    fn get_height(&self) -> usize {
+        self.wrapped.get_height()
+    }
+}
+
+impl BufferProvider<u8> for ColorKeyBlinkWrapper<'_> {
+    fn get_buffer(&self) -> &[u8] {
+        self.wrapped.get_buffer()
+    }
+}
+
+impl Blittable<u8> for ColorKeyBlinkWrapper<'_> {
+    #[inline(always)]
+    fn blend_function(&self, dst: &mut u8, src: &u8) {
+        *dst = if *src == self.color_key { *dst} else {self.blink_color};
     }
 }
 
