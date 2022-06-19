@@ -1,9 +1,9 @@
-use glam::{vec3a, Vec3A};
 use orom_miniquad::*;
 
 pub mod monitor_obj_loader;
 use monitor_obj_loader::Vec4;
 use crate::rendering::blittable::{BufferProviderMut, SizedSurface};
+use crate::utility::Barycentric2D;
 
 const IMAGE_BYTES: &[u8] = include_bytes!("monitor_mask.png");
 
@@ -482,7 +482,7 @@ impl<CtxHandler: ContextHandler> EventHandler for Stage<CtxHandler> {
 
 impl<CtxHandler: ContextHandler> Stage<CtxHandler> {
     fn check_for_hit_test(&mut self, x: f32, y: f32) {
-        let pt = vec3a(x, y, 0.0);
+        let pt = Vec4 {x, y, z: 0.0, w: 1.0 };
 
         let mut offset = 0;
         while offset < self.screen_mesh.indices.len() {
@@ -490,13 +490,18 @@ impl<CtxHandler: ContextHandler> Stage<CtxHandler> {
             let vert1 = self.screen_mesh.vertices[self.screen_mesh.indices[offset + 1] as usize];
             let vert2 = self.screen_mesh.vertices[self.screen_mesh.indices[offset + 2] as usize];
 
-            let pt0 = vec3a(vert0.position.x, vert0.position.y, 0.0);
-            let pt1 = vec3a(vert1.position.x, vert1.position.y, 0.0);
-            let pt2 = vec3a(vert2.position.x, vert2.position.y, 0.0);
+            let hit_test = Vec4::get_barycentric_2d(
+                pt,
+                [
+                    vert0.position,
+                    vert1.position,
+                    vert2.position
+                ]
+            );
 
-            match hit_test(pt, pt0, pt1, pt2) {
+            match hit_test {
                 None => {}
-                Some((bar_u, bar_v, bar_w)) => {
+                Some([bar_u, bar_v, bar_w]) => {
                     let u = bar_u * vert0.uv.x + bar_v * vert1.uv.x + bar_w * vert2.uv.x;
                     let v = 1.0 - (bar_u * vert0.uv.y + bar_v * vert1.uv.y + bar_w * vert2.uv.y);
                     self.context_data.mouse_x = u * self.context_data.buffer_width as f32;
@@ -506,28 +511,6 @@ impl<CtxHandler: ContextHandler> Stage<CtxHandler> {
             }
             offset += 3;
         }
-    }
-}
-
-fn cross2(v0: Vec3A, v1: Vec3A) -> f32 {
-    v0.x * v1.y - v0.y * v1.x
-}
-
-fn hit_test(pt: Vec3A, pt0: Vec3A, pt1: Vec3A, pt2: Vec3A) -> Option<(f32, f32, f32)> {
-    let e0 = pt1 - pt0;
-    let e1 = pt2 - pt1;
-
-    let v0 = pt - pt0;
-    let v1 = pt - pt1;
-    let v2 = pt - pt2;
-
-    let a = cross2(e0, e1);
-    let (bar_u, bar_v) = (cross2(v1, v2) / a, cross2(v2, v0) / a);
-    let bar_w = 1.0 - bar_u - bar_v;
-    if (bar_u > 0.0) && (bar_v > 0.0) && (bar_w > 0.0) {
-        Some((bar_u, bar_v, bar_w))
-    } else {
-        None
     }
 }
 

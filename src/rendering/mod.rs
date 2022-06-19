@@ -1,9 +1,10 @@
 pub mod blittable;
 pub mod fonts;
+pub mod deformed_rendering;
 
 use crate::format_loaders::bmp_256::Bmp;
 use crate::format_loaders::im_256::Image;
-use blittable::{BlitBuilder, Blittable, SizedSurface};
+use blittable::{Blittable, SizedSurface};
 use crate::rendering::blittable::{BufferProvider, BufferProviderMut};
 
 #[derive(Clone)]
@@ -134,14 +135,6 @@ impl Blittable<u8> for ColorKeyBlinkWrapper<'_> {
 }
 
 impl<'a, TBlittable: Blittable<u8>> blittable::BlitDestination<'a, u8, TBlittable> for BlittableSurface {
-    fn initiate_blit_on_self(&'a mut self, source_blittable: &'a TBlittable) -> BlitBuilder<'a, u8, TBlittable> {
-        let width = self.get_width();
-        BlitBuilder::create_ext(
-            self.get_buffer_mut(),
-            width,
-            source_blittable
-        )
-    }
 }
 
 impl<'a, TBlittable: Blittable<u8>> blittable::BlitDestination<'a, u8, TBlittable> for crate::window::RetroBlitContext {
