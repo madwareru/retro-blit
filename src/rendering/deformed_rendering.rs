@@ -309,20 +309,20 @@ impl<'a, T: Copy> TriangleRasterizer<'a, T> {
     ) {
         let mut x_acc = interpolator_0.x.floor();
         let dw = drawable.get_width();
+        let dh = drawable.get_height();
         let drawable_buffer = drawable.get_buffer();
         for x in interpolator_0.x as i32 ..= (interpolator_1.x + 0.5) as i32 {
             let t = ((x_acc - interpolator_0.x) / (interpolator_1.x - interpolator_0.x))
                 .clamp(0.0, 1.0);
             let u = (interpolator_0.y + (interpolator_1.y - interpolator_0.y) * t)
-                .clamp(0.0, dw as f32) as usize;
+                .clamp(0.0, (dw-1) as f32) as usize;
             let v = (interpolator_0.z + (interpolator_1.z - interpolator_0.z) * t)
-                .clamp(0.0, dw as f32) as usize;
+                .clamp(0.0, (dh-1) as f32) as usize;
             let uv_idx = v * dw + u;
-            if uv_idx < drawable_buffer.len() && y >= 0 && (0..self.buffer_width as i32).contains(&x) {
-                let color = drawable_buffer[uv_idx];
+            if y >= 0 && (0..self.buffer_width as i32).contains(&x) {
                 let idx = y as usize * self.buffer_width + x as usize;
                 if idx < self.buffer.len() {
-                    drawable.blend_function(&mut self.buffer[idx], &color);
+                    drawable.blend_function(&mut self.buffer[idx], &drawable_buffer[uv_idx]);
                 }
             }
             x_acc += 1.0;
