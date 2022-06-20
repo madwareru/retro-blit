@@ -113,16 +113,7 @@ impl<'a, T: Copy> TriangleRasterizer<'a, T> {
         );
         let (dx0, dx1) = (dx0 / dy, dx1 / dy);
         for y in middle_pos.1 as i32..=left_pos.1 as i32 {
-            let span_left = x0 as i32;
-            let span_right = x1 as i32;
-            for x in span_left..=span_right {
-                if y >= 0 && (0..self.buffer_width as i32).contains(&x) {
-                    let idx = y as usize * self.buffer_width + x as usize;
-                    if idx < self.buffer.len() {
-                        self.buffer[idx] = color;
-                    }
-                }
-            }
+            self.draw_span_colored(color, x0, x1, y);
             x0 += dx0;
             x1 += dx1;
         }
@@ -143,18 +134,22 @@ impl<'a, T: Copy> TriangleRasterizer<'a, T> {
         );
         let (dx0, dx1) = (dx0 / dy, dx1 / dy);
         for y in (left_pos.1 as i32..=middle_pos.1 as i32).rev() {
-            let span_left = x0 as i32;
-            let span_right = x1 as i32;
-            for x in span_left..=span_right {
-                if y >= 0 && (0..self.buffer_width as i32).contains(&x) {
-                    let idx = y as usize * self.buffer_width + x as usize;
-                    if idx < self.buffer.len() {
-                        self.buffer[idx] = color;
-                    }
-                }
-            }
+            self.draw_span_colored(color, x0, x1, y);
             x0 += dx0;
             x1 += dx1;
+        }
+    }
+
+    fn draw_span_colored(&mut self, color: T, x0: f32, x1: f32, y: i32) {
+        let span_left = x0 as i32;
+        let span_right = (x1 + 0.5) as i32;
+        for x in span_left..=span_right {
+            if y >= 0 && (0..self.buffer_width as i32).contains(&x) {
+                let idx = y as usize * self.buffer_width + x as usize;
+                if idx < self.buffer.len() {
+                    self.buffer[idx] = color;
+                }
+            }
         }
     }
 
@@ -281,6 +276,7 @@ impl<'a, T: Copy> TriangleRasterizer<'a, T> {
                     [top_pos, bottom_pos, middle_pos],
                     [top_uv, bottom_uv, middle_uv]
                 )
+
             }
         };
 
@@ -314,7 +310,7 @@ impl<'a, T: Copy> TriangleRasterizer<'a, T> {
         let mut x_acc = interpolator_0.x.floor();
         let dw = drawable.get_width();
         let drawable_buffer = drawable.get_buffer();
-        for x in interpolator_0.x as i32 - 1 ..= interpolator_1.x as i32 {
+        for x in interpolator_0.x as i32 ..= (interpolator_1.x + 0.5) as i32 {
             let t = ((x_acc - interpolator_0.x) / (interpolator_1.x - interpolator_0.x))
                 .clamp(0.0, 1.0);
             let u = (interpolator_0.y + (interpolator_1.y - interpolator_0.y) * t)
