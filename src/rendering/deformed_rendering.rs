@@ -127,28 +127,33 @@ impl<'a, T: Copy> TriangleRasterizer<'a, T> {
                 [middle_pos, bottom_pos, top_pos]
             }
         };
-        let ((mut x0, _), (mut x1, _)) = (middle_pos, middle_pos);
+        let ((mut x0, _), (mut x1, _)) = (left_pos, right_pos);
         let (dx0, dx1, dy) = (
-            left_pos.0 - middle_pos.0, right_pos.0 - middle_pos.0,
+            middle_pos.0 - left_pos.0, middle_pos.0 - right_pos.0,
             (middle_pos.1 as i32 - left_pos.1 as i32) as f32
         );
         let (dx0, dx1) = (dx0 / dy, dx1 / dy);
-        for y in (left_pos.1 as i32..=middle_pos.1 as i32).rev() {
+        for y in left_pos.1 as i32..=middle_pos.1 as i32 {
             self.draw_span_colored(color, x0, x1, y);
             x0 += dx0;
             x1 += dx1;
         }
     }
-
     fn draw_span_colored(&mut self, color: T, x0: f32, x1: f32, y: i32) {
-        let span_left = x0 as i32;
-        let span_right = (x1 + 0.5) as i32;
-        for x in span_left..=span_right {
-            if y >= 0 && (0..self.buffer_width as i32).contains(&x) {
-                let idx = y as usize * self.buffer_width + x as usize;
-                if idx < self.buffer.len() {
-                    self.buffer[idx] = color;
-                }
+        if (0..(self.buffer.len() / self.buffer_width) as i32).contains(&y) {
+            let stride = y as usize * self.buffer_width;
+            let span_left =
+                (
+                    stride +
+                    (x0.max(0.0) as usize).min(self.buffer_width - 1)
+                ).min(self.buffer.len()-1);
+            let span_right =
+                (
+                    stride +
+                    (x1.max(0.0) as usize).min(self.buffer_width - 1)
+                ).min(self.buffer.len()-1);
+            for pix in &mut self.buffer[span_left..=span_right] {
+                *pix = color;
             }
         }
     }
@@ -240,8 +245,6 @@ impl<'a, T: Copy> TriangleRasterizer<'a, T> {
             }
         };
 
-
-
         let mut interpolator_0 = vec3a(middle_pos.0, middle_uv.0, middle_uv.1);
         let mut interpolator_1 = vec3a(middle_pos.0, middle_uv.0, middle_uv.1);
         let delta_0 = vec3a(
@@ -276,24 +279,23 @@ impl<'a, T: Copy> TriangleRasterizer<'a, T> {
                     [top_pos, bottom_pos, middle_pos],
                     [top_uv, bottom_uv, middle_uv]
                 )
-
             }
         };
 
-        let mut interpolator_0 = vec3a(middle_pos.0, middle_uv.0, middle_uv.1);
-        let mut interpolator_1 = vec3a(middle_pos.0, middle_uv.0, middle_uv.1);
+        let mut interpolator_0 = vec3a(left_pos.0, left_uv.0, left_uv.1);
+        let mut interpolator_1 = vec3a(right_pos.0, right_uv.0, right_uv.1);
         let delta_0 = vec3a(
-            left_pos.0 - middle_pos.0,
-            left_uv.0 - middle_uv.0,
-            left_uv.1 - middle_uv.1
+            middle_pos.0 - left_pos.0,
+            middle_uv.0 - left_uv.0 ,
+            middle_uv.1 - left_uv.1
         ) / (middle_pos.1 - left_pos.1);
         let delta_1 = vec3a(
-            right_pos.0 - middle_pos.0,
-            right_uv.0 - middle_uv.0,
-            right_uv.1 - middle_uv.1
+             middle_pos.0 - right_pos.0,
+             middle_uv.0 - right_uv.0,
+             middle_uv.1 - right_uv.1
         ) / (middle_pos.1 - left_pos.1);
 
-        for y in (left_pos.1 as i32..=middle_pos.1 as i32).rev() {
+        for y in left_pos.1 as i32..=middle_pos.1 as i32 {
             self.draw_span(drawable, interpolator_0, interpolator_1, y);
             interpolator_0 += delta_0;
             interpolator_1 += delta_1;
@@ -307,25 +309,27 @@ impl<'a, T: Copy> TriangleRasterizer<'a, T> {
         interpolator_1: Vec3A,
         y: i32
     ) {
-        let mut x_acc = interpolator_0.x.floor();
-        let dw = drawable.get_width();
-        let dh = drawable.get_height();
-        let drawable_buffer = drawable.get_buffer();
-        for x in interpolator_0.x as i32 ..= (interpolator_1.x + 0.5) as i32 {
-            let t = ((x_acc - interpolator_0.x) / (interpolator_1.x - interpolator_0.x))
-                .clamp(0.0, 1.0);
-            let u = (interpolator_0.y + (interpolator_1.y - interpolator_0.y) * t)
-                .clamp(0.0, (dw-1) as f32) as usize;
-            let v = (interpolator_0.z + (interpolator_1.z - interpolator_0.z) * t)
-                .clamp(0.0, (dh-1) as f32) as usize;
-            let uv_idx = v * dw + u;
-            if y >= 0 && (0..self.buffer_width as i32).contains(&x) {
-                let idx = y as usize * self.buffer_width + x as usize;
-                if idx < self.buffer.len() {
-                    drawable.blend_function(&mut self.buffer[idx], &drawable_buffer[uv_idx]);
-                }
+        if (0..(self.buffer.len() / self.buffer_width) as i32).contains(&y) {
+            let stride = y as usize * self.buffer_width;
+            let x0 = interpolator_0.x.clamp(0.0, (self.buffer_width - 1) as f32);
+            let x1 = (interpolator_1.x + 0.15).clamp(0.0, (self.buffer_width - 1) as f32);
+            let span_left = stride + x0 as usize;
+            let span_right= stride + x1 as usize;
+            let dw = drawable.get_width();
+            let dh = drawable.get_height();
+            let drawable_buffer = drawable.get_buffer();
+            let mut x_acc = x0.floor();
+
+            for pix in &mut self.buffer[span_left..=span_right] {
+                let t = ((x_acc - interpolator_0.x) / (interpolator_1.x - interpolator_0.x))
+                    .clamp(0.0, 1.0);
+                let interpolated = interpolator_0 + (interpolator_1 - interpolator_0) * t;
+                let u = interpolated.y.clamp(0.0, (dw-1) as f32) as usize;
+                let v = interpolated.z.clamp(0.0, (dh-1) as f32) as usize;
+                let uv_idx = v * dw + u;
+                drawable.blend_function(pix, &drawable_buffer[uv_idx]);
+                x_acc += 1.0;
             }
-            x_acc += 1.0;
         }
     }
 }

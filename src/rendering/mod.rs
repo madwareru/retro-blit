@@ -1,6 +1,7 @@
 pub mod blittable;
 pub mod fonts;
 pub mod deformed_rendering;
+pub mod bresenham;
 
 use crate::format_loaders::bmp_256::Bmp;
 use crate::format_loaders::im_256::Image;

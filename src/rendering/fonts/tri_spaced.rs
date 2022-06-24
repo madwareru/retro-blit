@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use maplit::hashmap;
+use crate::format_loaders::im_256::Im256LoadingError;
 use crate::rendering::blittable::{BlitBuilder};
 use crate::rendering::{BlittableSurface};
 use crate::rendering::fonts::font_align::{HorizontalAlignment, VerticalAlignment};
@@ -249,7 +250,7 @@ impl Font {
         }
     }
 
-    pub fn default_font_small() -> std::io::Result<Self> {
+    pub fn default_font_small() -> Result<Self, Im256LoadingError> {
         let (_, surface) = crate::format_loaders::im_256::Image::load_from(DEFAULT_TRISPACED_FONT_SMALL_BYTES)?;
         let font_info = FontInfo {
             upper_cap_offset: 1,
@@ -742,7 +743,7 @@ impl Font {
         Ok(Self::new(font_info, surface))
     }
 
-    pub fn default_font() -> std::io::Result<Self> {
+    pub fn default_font() -> Result<Self, Im256LoadingError> {
         let (_, surface) = crate::format_loaders::im_256::Image::load_from(DEFAULT_TRISPACED_FONT_BYTES)?;
         let font_info = FontInfo {
             upper_cap_offset: 1,

@@ -1,0 +1,24 @@
+{
+    "name": "export-im256",
+    "displayName": "Export To Im256",
+    "description": "An exporter to the Im256, an 8-bit image format with an indexed palette",
+    "version": "1.0",
+    "author": {
+        "name": "Vitaly Samotokin",
+        "email": "madware.ru@gmail.com",
+        "url": "https://github.com/madwareru"
+    },
+    "contributors": [],
+    "publisher": "madwareru",
+    "license": "UNLICENSE",
+    "categories": [
+        "Scripts"
+    ],
+    "contributes": {
+        "scripts": [
+            {
+                "path": "package.lua"
+            }
+        ]
+    }
+}

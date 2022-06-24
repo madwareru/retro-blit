@@ -1,5 +1,6 @@
 use retro_blit::rendering::blittable::{BlitBuilder};
 use retro_blit::rendering::BlittableSurface;
+use retro_blit::rendering::bresenham::BresenhamLineDrawer;
 use retro_blit::rendering::deformed_rendering::{TriangleRasterizer};
 use retro_blit::rendering::fonts::font_align::{HorizontalAlignment, VerticalAlignment};
 use retro_blit::rendering::fonts::tri_spaced::{Font, TextDrawer};
@@ -40,7 +41,7 @@ impl MyGame {
         let (palette, sprite_sheet) = retro_blit::format_loaders::im_256::Image::load_from(PICTURE_BYTES).unwrap();
         let font = Font::default_font_small().unwrap();
         Self {
-            offset: 0,
+            offset: 4045,
             palette,
             sprite_sheet,
             font,
@@ -72,6 +73,7 @@ impl ContextHandler for MyGame {
     }
 
     fn on_mouse_up(&mut self, _ctx: &mut RetroBlitContext, button_number: u8) {
+        self.offset += 1;
         if button_number == 0 {
             self.button_pressed = false;
         }
@@ -114,24 +116,37 @@ impl ContextHandler for MyGame {
 
         let (mouse_x, mouse_y) = ctx.get_mouse_pos();
 
-        let ww = 24 + ((self.offset / 5) as i32 % 192) - 12;
-        let hh = 20 + ((self.offset / 6) as i32 % 160) - 10;
+        let offset_as_a_turtle = self.offset * 2;
+
+        let ww = 24 + ((offset_as_a_turtle / 5) as i32 % 192) - 12;
+        let hh = 20 + ((offset_as_a_turtle / 6) as i32 % 160) - 10;
 
         let positions = [45.0, 135.0, 225.0, 315.0].map(|angle| {
-            let x = 160.0 + (angle + self.offset as f32).to_radians().cos() * ww as f32;
-            let y = 100.0 - (angle + self.offset as f32).to_radians().sin() * hh as f32;
+            let x = 160.0 + (angle + offset_as_a_turtle as f32).to_radians().cos() * ww as f32;
+            let y = 100.0 - (angle + offset_as_a_turtle as f32).to_radians().sin() * hh as f32;
             ((x + 0.5) as i32, (y + 0.5) as i32)
         });
         let uvs = [(23, 0), (0, 0), (0, 19), (23, 19)];
 
-        TriangleRasterizer::create(ctx)
-            .with_positions([positions[2], positions[1], positions[0]])
-            .with_uvs([uvs[2], uvs[1], uvs[0]])
-            .rasterize_with_surface(&sprite_sheet_with_color_key);
-        TriangleRasterizer::create(ctx)
-            .with_positions([positions[3], positions[2], positions[0]])
-            .with_uvs([uvs[3], uvs[2], uvs[0]])
-            .rasterize_with_surface(&sprite_sheet_with_color_key);
+        {
+            //let _sw = retro_blit::utility::StopWatch::named("rotated necromancer");
+            TriangleRasterizer::create(ctx)
+                .with_positions([positions[2], positions[1], positions[0]])
+                .with_uvs([uvs[2], uvs[1], uvs[0]])
+                .rasterize_with_surface(&sprite_sheet_with_color_key);
+            TriangleRasterizer::create(ctx)
+                .with_positions([positions[3], positions[2], positions[0]])
+                .with_uvs([uvs[3], uvs[2], uvs[0]])
+                .rasterize_with_surface(&sprite_sheet_with_color_key);
+
+            for i in 0..4 {
+                let (p0, p1) = (positions[i], positions[(i + 1) % 4]);
+                BresenhamLineDrawer::create(ctx)
+                    .from(p0)
+                    .to(p1)
+                    .draw(28);
+            }
+        }
 
         if self.button_pressed {
             BlitBuilder::create(ctx, &(self.sprite_sheet.with_color_key_blink(0, 40)))
@@ -144,7 +159,6 @@ impl ContextHandler for MyGame {
                 .with_dest_pos(mouse_x as _, mouse_y as _)
                 .blit();
         }
-
         self.offset += 1;
     }
 }

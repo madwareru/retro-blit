@@ -1,11 +1,20 @@
 use std::io::Read;
+use std::ops::Deref;
+use thiserror::Error;
 use bin_serialization_rs::{Endianness, Reflectable, SerializationReflector};
 use crate::rendering::blittable::{SizedSurface};
 use crate::rendering::BlittableSurface;
 
+#[derive(Error, Debug)]
+pub enum Im256LoadingError {
+    #[error("IO error")]
+    FailedToParseFloat(#[from] std::io::Error),
+    #[error("Incorrect signature. 'IM' expected")]
+    IncorrectSignature
+}
+
 #[derive(Clone)]
 pub struct Image {
-    _signature: u16,
     palette_size: u16,
     width: u16,
     height: u16,
@@ -16,10 +25,7 @@ pub struct Image {
 
 impl Default for Image {
     fn default() -> Self {
-        let _signature = b'I' as u16 + (b'M' as u16) * 0x100;
-        let _nop = 0;
         Self {
-            _signature,
             palette_size: Default::default(),
             width: Default::default(),
             height: Default::default(),
@@ -32,7 +38,6 @@ impl Default for Image {
 
 impl Reflectable for Image {
     fn reflect<TSerializationReflector: SerializationReflector>(&mut self, reflector: &mut TSerializationReflector) -> std::io::Result<()> {
-        reflector.reflect_u16(&mut self._signature)?;
         reflector.reflect_u16(&mut self.palette_size)?;
         reflector.reflect_u16(&mut self.width)?;
         reflector.reflect_u16(&mut self.height)?;
@@ -51,8 +56,35 @@ impl Reflectable for Image {
     }
 }
 
+#[derive(Default, Clone, PartialEq)]
+struct U8Wrapper(pub u8);
+impl Reflectable for U8Wrapper {
+    fn reflect<TSerializationReflector: SerializationReflector>(
+        &mut self,
+        reflector: &mut TSerializationReflector,
+    ) -> std::io::Result<()> {
+        reflector.reflect_u8(&mut self.0)
+    }
+}
+impl AsRef<u8> for U8Wrapper {
+    fn as_ref(&self) -> &u8 {
+        &(self.0)
+    }
+}
+impl Deref for U8Wrapper {
+    type Target = u8;
+    fn deref(&self) -> &Self::Target {
+        &(self.0)
+    }
+}
+
 impl Image {
-    pub fn load_from(mut source: impl Read) -> std::io::Result<(Vec<[u8; 3]>, BlittableSurface)> {
+    pub fn load_from(mut source: impl Read) -> Result<(Vec<[u8; 3]>, BlittableSurface), Im256LoadingError> {
+        let signature_0 = U8Wrapper::deserialize(&mut source, Endianness::LittleEndian)?;
+        let signature_1 = U8Wrapper::deserialize(&mut source, Endianness::LittleEndian)?;
+        if [*signature_0, *signature_1] != [b'I', b'M'] {
+            return Err(Im256LoadingError::IncorrectSignature);
+        }
         let img = Image::deserialize(&mut source, Endianness::LittleEndian)?;
         let mut palette = Vec::with_capacity(img.palette_size as usize);
         for i in 0..img.palette_size as usize {
