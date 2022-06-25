@@ -28,6 +28,8 @@ impl PathTessellator {
             return;
         }
 
+        self.path_buffer.clear();
+
         let mut builder = self.path_buffer.builder();
 
         builder.begin(point(positions[0].0 as f32 + 0.5, positions[0].1 as f32 + 0.5));
