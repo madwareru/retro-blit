@@ -1,4 +1,6 @@
+use glam::vec3a;
 use crate::rendering::blittable::{BufferProviderMut, SizedSurface};
+use crate::rendering::transform::Transform;
 
 fn plot_bresenham_circle(
     cx: i32, cy: i32, r: i32,
@@ -128,14 +130,118 @@ impl<'a, T: Copy> BresenhamCircleDrawer<'a, T> {
     }
 }
 
-pub struct BresenhamLineDrawer<'a, T: Copy> {
+pub struct LineStripRasterizer<'a, T: Copy + Default>  {
+    buffer: &'a mut [T],
+    buffer_width: usize,
+    transform: Transform,
+    color: T
+}
+impl<'a, T: Copy + Default> LineStripRasterizer<'a, T> {
+    pub fn create(buffer_provider: &'a mut (impl BufferProviderMut<T>+SizedSurface)) -> Self {
+        let buffer_width = buffer_provider.get_width();
+        let buffer = buffer_provider.get_buffer_mut();
+        Self {
+            buffer,
+            buffer_width,
+            transform: Transform::from_identity(),
+            color: Default::default()
+        }
+    }
+
+    pub fn with_color(self, color: T) -> Self {
+        Self {
+            color,
+            ..self
+        }
+    }
+
+    pub fn with_transform(self, transform: Transform) -> Self {
+        Self {
+            transform,
+            ..self
+        }
+    }
+
+    pub fn with_translation(self, translation: (i32, i32)) -> Self {
+        Self {
+            transform: self.transform.with_translation(translation),
+            ..self
+        }
+    }
+
+    pub fn with_rotation(self, rotation: f32) -> Self {
+        Self {
+            transform: self.transform.with_rotation(rotation),
+            ..self
+        }
+    }
+
+    pub fn with_scale(self, scale: (f32, f32)) -> Self {
+        Self {
+            transform: self.transform.with_scale(scale),
+            ..self
+        }
+    }
+
+    fn get_transformed_positions(&self, positions: [(i32, i32); 2]) -> [(i32, i32); 2] {
+        positions.map(|it| {
+            let p = self.transform.matrix * vec3a(it.0 as f32 + 0.5, it.1 as f32 + 0.5, 1.0);
+            (p.x.floor() as i32, p.y.floor() as i32)
+        })
+    }
+
+    pub fn rasterize_slice(self, closed: bool, positions: &[(i32, i32)]) {
+        if positions.len() <= 1 {
+            return;
+        }
+        if closed {
+            for i in 1..=positions.len() {
+                let next = self.get_transformed_positions(
+                    [
+                        positions[i-1],
+                        positions[i % positions.len()]
+                    ]
+                );
+                LineRasterizer::create_from_raw(self.buffer, self.buffer_width)
+                    .from(next[0])
+                    .to(next[1])
+                    .rasterize(self.color);
+            }
+        } else {
+            for i in 1..positions.len() {
+                let next = self.get_transformed_positions(
+                    [
+                        positions[i-1],
+                        positions[i]
+                    ]
+                );
+                LineRasterizer::create_from_raw(self.buffer, self.buffer_width)
+                    .from(next[0])
+                    .to(next[1])
+                    .rasterize(self.color);
+            }
+        }
+
+    }
+}
+
+pub struct LineRasterizer<'a, T: Copy> {
     buffer: &'a mut [T],
     buffer_width: usize,
     from: (i32, i32),
     to: (i32, i32)
 }
 
-impl<'a, T: Copy> BresenhamLineDrawer<'a, T> {
+impl<'a, T: Copy> LineRasterizer<'a, T> {
+    pub fn create_from_raw(buffer: &'a mut [T], buffer_width: usize) -> Self {
+        Self {
+            buffer,
+            buffer_width,
+            from: (0, 0),
+            to: (0, 0)
+        }
+    }
+
     pub fn create(buffer_provider: &'a mut (impl BufferProviderMut<T>+SizedSurface)) -> Self {
         let buffer_width = buffer_provider.get_width();
         let buffer = buffer_provider.get_buffer_mut();
@@ -155,7 +261,7 @@ impl<'a, T: Copy> BresenhamLineDrawer<'a, T> {
         Self { to, ..self }
     }
 
-    pub fn draw(self, color: T) {
+    pub fn rasterize(self, color: T) {
         let buffer_height = self.buffer.len() / self.buffer_width;
         plot_bresenham_line(
             self.from.0,

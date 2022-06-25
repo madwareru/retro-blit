@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+use std::convert::TryFrom;
 use orom_miniquad::*;
 
 pub mod monitor_obj_loader;
@@ -7,13 +9,283 @@ use crate::utility::Barycentric2D;
 
 const IMAGE_BYTES: &[u8] = include_bytes!("monitor_mask.png");
 
+#[derive(Copy, Clone, Hash, PartialEq, Eq)]
+pub enum KeyCode {
+    Space,
+    Apostrophe,
+    Comma,
+    Minus,
+    Period,
+    Slash,
+    Key0,
+    Key1,
+    Key2,
+    Key3,
+    Key4,
+    Key5,
+    Key6,
+    Key7,
+    Key8,
+    Key9,
+    Semicolon,
+    Equal,
+    A,
+    B,
+    C,
+    D,
+    E,
+    F,
+    G,
+    H,
+    I,
+    J,
+    K,
+    L,
+    M,
+    N,
+    O,
+    P,
+    Q,
+    R,
+    S,
+    T,
+    U,
+    V,
+    W,
+    X,
+    Y,
+    Z,
+    LeftBracket,
+    Backslash,
+    RightBracket,
+    GraveAccent,
+    World1,
+    World2,
+    Escape,
+    Enter,
+    Tab,
+    Backspace,
+    Insert,
+    Delete,
+    Right,
+    Left,
+    Down,
+    Up,
+    PageUp,
+    PageDown,
+    Home,
+    End,
+    CapsLock,
+    ScrollLock,
+    NumLock,
+    PrintScreen,
+    Pause,
+    F1,
+    F2,
+    F3,
+    F4,
+    F5,
+    F6,
+    F7,
+    F8,
+    F9,
+    F10,
+    F11,
+    F12,
+    F13,
+    F14,
+    F15,
+    F16,
+    F17,
+    F18,
+    F19,
+    F20,
+    F21,
+    F22,
+    F23,
+    F24,
+    F25,
+    Kp0,
+    Kp1,
+    Kp2,
+    Kp3,
+    Kp4,
+    Kp5,
+    Kp6,
+    Kp7,
+    Kp8,
+    Kp9,
+    KpDecimal,
+    KpDivide,
+    KpMultiply,
+    KpSubtract,
+    KpAdd,
+    KpEnter,
+    KpEqual,
+    LeftShift,
+    LeftControl,
+    LeftAlt,
+    LeftSuper,
+    RightShift,
+    RightControl,
+    RightAlt,
+    RightSuper,
+    Menu
+}
+pub enum KeyMod {
+    Shift,
+    Control,
+    Option,
+    Command
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct KeyMods {
+    pub shift: bool,
+    pub control: bool,
+    pub option: bool,
+    pub command: bool,
+}
+
+impl std::convert::TryFrom<orom_miniquad::KeyCode> for KeyCode {
+    type Error = ();
+
+    fn try_from(value: orom_miniquad::KeyCode) -> Result<Self, Self::Error> {
+        match value {
+            orom_miniquad::KeyCode::A => Ok(KeyCode::A),
+            orom_miniquad::KeyCode::B => Ok(KeyCode::B),
+            orom_miniquad::KeyCode::C => Ok(KeyCode::C),
+            orom_miniquad::KeyCode::D => Ok(KeyCode::D),
+            orom_miniquad::KeyCode::E => Ok(KeyCode::E),
+            orom_miniquad::KeyCode::F => Ok(KeyCode::F),
+            orom_miniquad::KeyCode::G => Ok(KeyCode::G),
+            orom_miniquad::KeyCode::H => Ok(KeyCode::H),
+            orom_miniquad::KeyCode::I => Ok(KeyCode::I),
+            orom_miniquad::KeyCode::J => Ok(KeyCode::J),
+            orom_miniquad::KeyCode::K => Ok(KeyCode::K),
+            orom_miniquad::KeyCode::L => Ok(KeyCode::L),
+            orom_miniquad::KeyCode::M => Ok(KeyCode::N),
+            orom_miniquad::KeyCode::N => Ok(KeyCode::N),
+            orom_miniquad::KeyCode::O => Ok(KeyCode::O),
+            orom_miniquad::KeyCode::P => Ok(KeyCode::P),
+            orom_miniquad::KeyCode::Q => Ok(KeyCode::Q),
+            orom_miniquad::KeyCode::R => Ok(KeyCode::R),
+            orom_miniquad::KeyCode::S => Ok(KeyCode::S),
+            orom_miniquad::KeyCode::T => Ok(KeyCode::T),
+            orom_miniquad::KeyCode::U => Ok(KeyCode::U),
+            orom_miniquad::KeyCode::V => Ok(KeyCode::V),
+            orom_miniquad::KeyCode::W => Ok(KeyCode::W),
+            orom_miniquad::KeyCode::X => Ok(KeyCode::X),
+            orom_miniquad::KeyCode::Y => Ok(KeyCode::Y),
+            orom_miniquad::KeyCode::Z => Ok(KeyCode::Z),
+            orom_miniquad::KeyCode::Space => Ok(KeyCode::Space),
+            orom_miniquad::KeyCode::Apostrophe => Ok(KeyCode::Apostrophe),
+            orom_miniquad::KeyCode::Comma => Ok(KeyCode::Comma),
+            orom_miniquad::KeyCode::Minus => Ok(KeyCode::Minus),
+            orom_miniquad::KeyCode::Period => Ok(KeyCode::Period),
+            orom_miniquad::KeyCode::Slash => Ok(KeyCode::Slash),
+            orom_miniquad::KeyCode::Key0 => Ok(KeyCode::Key0),
+            orom_miniquad::KeyCode::Key1 => Ok(KeyCode::Key1),
+            orom_miniquad::KeyCode::Key2 => Ok(KeyCode::Key2),
+            orom_miniquad::KeyCode::Key3 => Ok(KeyCode::Key3),
+            orom_miniquad::KeyCode::Key4 => Ok(KeyCode::Key4),
+            orom_miniquad::KeyCode::Key5 => Ok(KeyCode::Key5),
+            orom_miniquad::KeyCode::Key6 => Ok(KeyCode::Key6),
+            orom_miniquad::KeyCode::Key7 => Ok(KeyCode::Key7),
+            orom_miniquad::KeyCode::Key8 => Ok(KeyCode::Key8),
+            orom_miniquad::KeyCode::Key9 => Ok(KeyCode::Key9),
+            orom_miniquad::KeyCode::Semicolon => Ok(KeyCode::Semicolon),
+            orom_miniquad::KeyCode::Equal => Ok(KeyCode::Equal),
+            orom_miniquad::KeyCode::LeftBracket => Ok(KeyCode::LeftBracket),
+            orom_miniquad::KeyCode::Backslash => Ok(KeyCode::Backslash),
+            orom_miniquad::KeyCode::RightBracket => Ok(KeyCode::RightBracket),
+            orom_miniquad::KeyCode::GraveAccent => Ok(KeyCode::GraveAccent),
+            orom_miniquad::KeyCode::World1 => Ok(KeyCode::World1),
+            orom_miniquad::KeyCode::World2 => Ok(KeyCode::World2),
+            orom_miniquad::KeyCode::Escape => Ok(KeyCode::Escape),
+            orom_miniquad::KeyCode::Enter => Ok(KeyCode::Enter),
+            orom_miniquad::KeyCode::Tab => Ok(KeyCode::Tab),
+            orom_miniquad::KeyCode::Backspace => Ok(KeyCode::Backspace),
+            orom_miniquad::KeyCode::Insert => Ok(KeyCode::Insert),
+            orom_miniquad::KeyCode::Delete => Ok(KeyCode::Delete),
+            orom_miniquad::KeyCode::Right => Ok(KeyCode::Right),
+            orom_miniquad::KeyCode::Left => Ok(KeyCode::Left),
+            orom_miniquad::KeyCode::Down => Ok(KeyCode::Down),
+            orom_miniquad::KeyCode::Up => Ok(KeyCode::Up),
+            orom_miniquad::KeyCode::PageUp => Ok(KeyCode::PageUp),
+            orom_miniquad::KeyCode::PageDown => Ok(KeyCode::PageDown),
+            orom_miniquad::KeyCode::Home => Ok(KeyCode::Home),
+            orom_miniquad::KeyCode::End => Ok(KeyCode::End),
+            orom_miniquad::KeyCode::CapsLock => Ok(KeyCode::CapsLock),
+            orom_miniquad::KeyCode::ScrollLock => Ok(KeyCode::ScrollLock),
+            orom_miniquad::KeyCode::NumLock => Ok(KeyCode::NumLock),
+            orom_miniquad::KeyCode::PrintScreen => Ok(KeyCode::PrintScreen),
+            orom_miniquad::KeyCode::Pause => Ok(KeyCode::Pause),
+            orom_miniquad::KeyCode::F1 => Ok(KeyCode::F1),
+            orom_miniquad::KeyCode::F2 => Ok(KeyCode::F2),
+            orom_miniquad::KeyCode::F3 => Ok(KeyCode::F3),
+            orom_miniquad::KeyCode::F4 => Ok(KeyCode::F4),
+            orom_miniquad::KeyCode::F5 => Ok(KeyCode::F5),
+            orom_miniquad::KeyCode::F6 => Ok(KeyCode::F6),
+            orom_miniquad::KeyCode::F7 => Ok(KeyCode::F7),
+            orom_miniquad::KeyCode::F8 => Ok(KeyCode::F8),
+            orom_miniquad::KeyCode::F9 => Ok(KeyCode::F9),
+            orom_miniquad::KeyCode::F10 => Ok(KeyCode::F10),
+            orom_miniquad::KeyCode::F11 => Ok(KeyCode::F11),
+            orom_miniquad::KeyCode::F12 => Ok(KeyCode::F12),
+            orom_miniquad::KeyCode::F13 => Ok(KeyCode::F13),
+            orom_miniquad::KeyCode::F14 => Ok(KeyCode::F14),
+            orom_miniquad::KeyCode::F15 => Ok(KeyCode::F15),
+            orom_miniquad::KeyCode::F16 => Ok(KeyCode::F16),
+            orom_miniquad::KeyCode::F17 => Ok(KeyCode::F17),
+            orom_miniquad::KeyCode::F18 => Ok(KeyCode::F18),
+            orom_miniquad::KeyCode::F19 => Ok(KeyCode::F19),
+            orom_miniquad::KeyCode::F20 => Ok(KeyCode::F20),
+            orom_miniquad::KeyCode::F21 => Ok(KeyCode::F21),
+            orom_miniquad::KeyCode::F22 => Ok(KeyCode::F22),
+            orom_miniquad::KeyCode::F23 => Ok(KeyCode::F23),
+            orom_miniquad::KeyCode::F24 => Ok(KeyCode::F24),
+            orom_miniquad::KeyCode::F25 => Ok(KeyCode::F25),
+            orom_miniquad::KeyCode::Kp0 => Ok(KeyCode::Kp0),
+            orom_miniquad::KeyCode::Kp1 => Ok(KeyCode::Kp1),
+            orom_miniquad::KeyCode::Kp2 => Ok(KeyCode::Kp2),
+            orom_miniquad::KeyCode::Kp3 => Ok(KeyCode::Kp3),
+            orom_miniquad::KeyCode::Kp4 => Ok(KeyCode::Kp4),
+            orom_miniquad::KeyCode::Kp5 => Ok(KeyCode::Kp5),
+            orom_miniquad::KeyCode::Kp6 => Ok(KeyCode::Kp6),
+            orom_miniquad::KeyCode::Kp7 => Ok(KeyCode::Kp7),
+            orom_miniquad::KeyCode::Kp8 => Ok(KeyCode::Kp8),
+            orom_miniquad::KeyCode::Kp9 => Ok(KeyCode::Kp9),
+            orom_miniquad::KeyCode::KpDecimal => Ok(KeyCode::KpDecimal),
+            orom_miniquad::KeyCode::KpDivide => Ok(KeyCode::KpDivide),
+            orom_miniquad::KeyCode::KpMultiply => Ok(KeyCode::KpMultiply),
+            orom_miniquad::KeyCode::KpSubtract => Ok(KeyCode::KpSubtract),
+            orom_miniquad::KeyCode::KpAdd => Ok(KeyCode::KpAdd),
+            orom_miniquad::KeyCode::KpEnter => Ok(KeyCode::KpEnter),
+            orom_miniquad::KeyCode::KpEqual => Ok(KeyCode::KpEqual),
+            orom_miniquad::KeyCode::LeftShift => Ok(KeyCode::LeftShift),
+            orom_miniquad::KeyCode::LeftControl => Ok(KeyCode::LeftControl),
+            orom_miniquad::KeyCode::LeftAlt => Ok(KeyCode::LeftAlt),
+            orom_miniquad::KeyCode::LeftSuper => Ok(KeyCode::LeftSuper),
+            orom_miniquad::KeyCode::RightShift => Ok(KeyCode::RightShift),
+            orom_miniquad::KeyCode::RightControl => Ok(KeyCode::RightControl),
+            orom_miniquad::KeyCode::RightAlt => Ok(KeyCode::RightAlt),
+            orom_miniquad::KeyCode::RightSuper => Ok(KeyCode::RightSuper),
+            orom_miniquad::KeyCode::Menu => Ok(KeyCode::Menu),
+            orom_miniquad::KeyCode::Unknown => Err(()),
+        }
+    }
+}
+
 pub struct RetroBlitContext {
     buffer_width: usize,
     buffer_height: usize,
     colors: [u8; 256 * 3],
     buffer_pixels: Vec<u8>,
     mouse_x: f32,
-    mouse_y: f32
+    mouse_y: f32,
+    keys_pressed: HashSet<KeyCode>,
+    key_mods_pressed: KeyMods
 }
 
 pub enum ScrollKind {
@@ -46,6 +318,19 @@ impl RetroBlitContext {
         for pixel in self.buffer_pixels.iter_mut() {
             *pixel = color_idx;
         }
+    }
+
+    pub fn is_key_mod_pressed(&self, key_mod: KeyMod) -> bool {
+        match key_mod {
+            KeyMod::Shift => self.key_mods_pressed.shift,
+            KeyMod::Control => self.key_mods_pressed.control,
+            KeyMod::Option => self.key_mods_pressed.option,
+            KeyMod::Command => self.key_mods_pressed.command
+        }
+    }
+
+    pub fn is_key_pressed(&self, key_code: KeyCode) -> bool {
+        self.keys_pressed.contains(&key_code)
     }
 
     pub fn get_mouse_pos(&self) -> (f32, f32) {
@@ -95,8 +380,10 @@ impl RetroBlitContext {
 pub trait ContextHandler {
     fn get_window_title(&self) -> &'static str;
     fn get_window_mode(&self) -> WindowMode;
-    fn on_mouse_down(&mut self, ctx: &mut RetroBlitContext, button_number: u8);
-    fn on_mouse_up(&mut self, ctx: &mut RetroBlitContext, button_number: u8);
+    fn on_mouse_down(&mut self, _ctx: &mut RetroBlitContext, _button_number: u8){}
+    fn on_mouse_up(&mut self, _ctx: &mut RetroBlitContext, _button_number: u8){}
+    fn on_key_down(&mut self, _ctx: &mut RetroBlitContext, _key_code: KeyCode, _key_mods: KeyMods){}
+    fn on_key_up(&mut self, _ctx: &mut RetroBlitContext, _key_code: KeyCode, _key_mods: KeyMods){}
     fn init(&mut self, ctx: &mut RetroBlitContext);
     fn update(&mut self, ctx: &mut RetroBlitContext);
 }
@@ -271,7 +558,14 @@ impl<CtxHandler: ContextHandler> Stage<CtxHandler> {
             buffer_pixels: vec![0u8; buffer_width * buffer_height],
             colors: [0u8; 256 * 3],
             mouse_x: 0.0,
-            mouse_y: 0.0
+            mouse_y: 0.0,
+            keys_pressed: HashSet::new(),
+            key_mods_pressed: KeyMods {
+                shift: false,
+                control: false,
+                option: false,
+                command: false
+            }
         };
 
         let mut handler = handler;
@@ -476,6 +770,53 @@ impl<CtxHandler: ContextHandler> EventHandler for Stage<CtxHandler> {
             MouseButton::Middle => { self.handler.on_mouse_up(&mut self.context_data, 1); },
             MouseButton::Right => { self.handler.on_mouse_up(&mut self.context_data, 2); },
             _ => {}
+        }
+    }
+
+    fn key_down_event(
+        &mut self,
+        _ctx: &mut Context,
+        keycode: orom_miniquad::KeyCode,
+        keymods: orom_miniquad::KeyMods,
+        _repeat: bool,
+    ) {
+        let new_key_mods = KeyMods {
+            shift: keymods.shift,
+            option: keymods.alt,
+            control: keymods.ctrl,
+            command: keymods.logo
+        };
+        self.context_data.key_mods_pressed = new_key_mods;
+        if let Ok(key_code) = KeyCode::try_from(keycode) {
+            self.context_data.keys_pressed.insert(key_code);
+            self.handler.on_key_down(
+                &mut self.context_data,
+                key_code,
+                new_key_mods
+            );
+        }
+    }
+
+    fn key_up_event(
+        &mut self,
+        _ctx: &mut Context,
+        keycode: orom_miniquad::KeyCode,
+        keymods: orom_miniquad::KeyMods
+    ) {
+        let new_key_mods = KeyMods {
+            shift: keymods.shift,
+            option: keymods.alt,
+            control: keymods.ctrl,
+            command: keymods.logo
+        };
+        self.context_data.key_mods_pressed = new_key_mods;
+        if let Ok(key_code) = KeyCode::try_from(keycode) {
+            self.context_data.keys_pressed.remove(&key_code);
+            self.handler.on_key_up(
+                &mut self.context_data,
+                key_code,
+                new_key_mods
+            );
         }
     }
 }

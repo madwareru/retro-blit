@@ -1,9 +1,11 @@
 use retro_blit::rendering::blittable::{BlitBuilder};
 use retro_blit::rendering::BlittableSurface;
-use retro_blit::rendering::bresenham::BresenhamLineDrawer;
-use retro_blit::rendering::deformed_rendering::{TriangleRasterizer};
+use retro_blit::rendering::bresenham::{LineStripRasterizer};
+use retro_blit::rendering::deformed_rendering::{TexturedVertex, TriangleRasterizer, Vertex};
 use retro_blit::rendering::fonts::font_align::{HorizontalAlignment, VerticalAlignment};
 use retro_blit::rendering::fonts::tri_spaced::{Font, TextDrawer};
+use retro_blit::rendering::tessellation::PathTessellator;
+use retro_blit::rendering::transform::Transform;
 use retro_blit::window::{RetroBlitContext, ContextHandler, WindowMode};
 
 const PICTURE_BYTES: &[u8] = include_bytes!("spritesheet.im256");
@@ -34,14 +36,35 @@ struct MyGame {
     sprite_sheet: BlittableSurface,
     font: Font,
     level: [[Tile; 5]; 5],
-    button_pressed: bool
+    button_pressed: bool,
+    poly_line_positions: Vec<(i32, i32)>,
+    poly_line_vertices: Vec<Vertex>,
+    poly_line_indices: Vec<u16>
 }
 impl MyGame {
     pub fn new() -> Self {
         let (palette, sprite_sheet) = retro_blit::format_loaders::im_256::Image::load_from(PICTURE_BYTES).unwrap();
         let font = Font::default_font_small().unwrap();
+        let mut poly_line_vertices = Vec::new();
+        let mut poly_line_indices = Vec::new();
+
+        let poly_line_positions = vec![
+            (-30, -40),
+            (70, 0),
+            (-30, 40),
+            (00, 0)
+        ];
+
+        PathTessellator::new().tessellate_polyline_fill(
+            &mut poly_line_vertices,
+            &mut poly_line_indices,
+            &poly_line_positions
+        );
         Self {
             offset: 4045,
+            poly_line_positions,
+            poly_line_vertices,
+            poly_line_indices,
             palette,
             sprite_sheet,
             font,
@@ -118,34 +141,45 @@ impl ContextHandler for MyGame {
 
         let offset_as_a_turtle = self.offset * 2;
 
-        let ww = 24 + ((offset_as_a_turtle / 5) as i32 % 192) - 12;
-        let hh = 20 + ((offset_as_a_turtle / 6) as i32 % 160) - 10;
+        let vertices = [
+            TexturedVertex { position: (24, 20), uv: (23, 19) },
+            TexturedVertex { position: (-24, 20), uv: (0, 19) },
+            TexturedVertex { position: (-24, -20), uv: (0, 0) },
+            TexturedVertex { position: (24, -20), uv: (23, 0) },
+        ];
 
-        let positions = [45.0, 135.0, 225.0, 315.0].map(|angle| {
-            let x = 160.0 + (angle + offset_as_a_turtle as f32).to_radians().cos() * ww as f32;
-            let y = 100.0 - (angle + offset_as_a_turtle as f32).to_radians().sin() * hh as f32;
-            ((x + 0.5) as i32, (y + 0.5) as i32)
-        });
-        let uvs = [(23, 0), (0, 0), (0, 19), (23, 19)];
+        TriangleRasterizer::create(ctx)
+            .with_rotation((offset_as_a_turtle as f32 / 3.0).to_radians())
+            .with_translation((64, 64))
+            .rasterize_with_color(
+                37,
+                &self.poly_line_vertices,
+                &self.poly_line_indices
+            );
+
+        LineStripRasterizer::create(ctx)
+            .with_color(31)
+            .with_rotation((offset_as_a_turtle as f32 / 3.0).to_radians())
+            .with_translation((64, 64))
+            .rasterize_slice(true, &self.poly_line_positions);
 
         {
-            //let _sw = retro_blit::utility::StopWatch::named("rotated necromancer");
-            TriangleRasterizer::create(ctx)
-                .with_positions([positions[2], positions[1], positions[0]])
-                .with_uvs([uvs[2], uvs[1], uvs[0]])
-                .rasterize_with_surface(&sprite_sheet_with_color_key);
-            TriangleRasterizer::create(ctx)
-                .with_positions([positions[3], positions[2], positions[0]])
-                .with_uvs([uvs[3], uvs[2], uvs[0]])
-                .rasterize_with_surface(&sprite_sheet_with_color_key);
+            let transform = Transform::from_angle_translation_scale(
+                (offset_as_a_turtle as f32).to_radians(),
+                (160, 100),
+                (
+                    2.0 + (offset_as_a_turtle as f32 / 150.0).cos(),
+                    0.5 + (offset_as_a_turtle as f32 / 137.0).sin()
+                )
+            );
 
-            for i in 0..4 {
-                let (p0, p1) = (positions[i], positions[(i + 1) % 4]);
-                BresenhamLineDrawer::create(ctx)
-                    .from(p0)
-                    .to(p1)
-                    .draw(28);
-            }
+            TriangleRasterizer::create(ctx)
+                .with_transform(transform)
+                .rasterize_with_surface(
+                    &sprite_sheet_with_color_key,
+                    &vertices,
+                    &[0, 1, 2, 0, 2, 3]
+                );
         }
 
         if self.button_pressed {
