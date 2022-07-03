@@ -1,11 +1,12 @@
 use std::collections::HashSet;
 use std::convert::TryFrom;
+use std::time::Instant;
 use orom_miniquad::*;
 
 pub mod monitor_obj_loader;
 use monitor_obj_loader::Vec4;
 use crate::rendering::blittable::{BufferProviderMut, SizedSurface};
-use crate::utility::Barycentric2D;
+use crate::math_utils::Barycentric2D;
 
 const IMAGE_BYTES: &[u8] = include_bytes!("monitor_mask.png");
 
@@ -288,6 +289,15 @@ pub struct RetroBlitContext {
     key_mods_pressed: KeyMods
 }
 
+impl RetroBlitContext {
+    pub fn put_pixel(&mut self, x: i16, y: i16, color: u8) {
+        if (0..self.buffer_width as i16).contains(&x) && (0..self.buffer_height as i16).contains(&y) {
+            let idx = y as usize * self.buffer_width + x as usize;
+            self.get_buffer_mut()[idx] = color;
+        }
+    }
+}
+
 pub enum ScrollKind {
     AllPalette,
     Range{ start_idx: u8, len: u8 }
@@ -385,7 +395,7 @@ pub trait ContextHandler {
     fn on_key_down(&mut self, _ctx: &mut RetroBlitContext, _key_code: KeyCode, _key_mods: KeyMods){}
     fn on_key_up(&mut self, _ctx: &mut RetroBlitContext, _key_code: KeyCode, _key_mods: KeyMods){}
     fn init(&mut self, ctx: &mut RetroBlitContext);
-    fn update(&mut self, ctx: &mut RetroBlitContext);
+    fn update(&mut self, ctx: &mut RetroBlitContext, dt: f32);
 }
 
 fn get_buffer_dimensions(handler: &impl ContextHandler) -> (usize, usize) {
@@ -406,7 +416,8 @@ pub struct Stage<CtxHandler: ContextHandler> {
     context_data: RetroBlitContext,
     handler: CtxHandler,
     buffer_texture: Texture,
-    colors_texture: Texture
+    colors_texture: Texture,
+    last_instant: Instant
 }
 
 impl<CtxHandler: ContextHandler> Stage<CtxHandler> {
@@ -696,14 +707,17 @@ impl<CtxHandler: ContextHandler> Stage<CtxHandler> {
             context_data,
             handler,
             buffer_texture,
-            colors_texture
+            colors_texture,
+            last_instant: Instant::now()
         }
     }
 }
 
 impl<CtxHandler: ContextHandler> EventHandler for Stage<CtxHandler> {
     fn update(&mut self, ctx: &mut Context) {
-        self.handler.update(&mut self.context_data);
+        let dt = self.last_instant.elapsed().as_micros() as f32 / 1000000.0;
+        self.last_instant = Instant::now();
+        self.handler.update(&mut self.context_data, dt);
         self.colors_texture.update(ctx, &self.context_data.colors);
         self.buffer_texture.update(ctx, &self.context_data.buffer_pixels);
     }

@@ -118,15 +118,15 @@ fn blit_ext<T: Copy, TBlittable: Blittable<T>>(
     drawable: &TBlittable, buffer: &mut [T], buffer_width: usize,
     src_x: usize, src_y: usize,
     src_width: usize, src_height: usize,
-    dst_x: i32, dst_y: i32,
+    dst_x: i16, dst_y: i16,
     dst_width: usize, dst_height: usize,
     flip: Flip
 ) {
     let src_width_max = (src_width + src_x).min(drawable.get_width());
     let src_height_max = (src_height + src_y).min(drawable.get_height());
 
-    let dst_width_max = ((dst_width as i32 + dst_x) as usize).min(buffer_width);
-    let dst_height_max = ((dst_height as i32 + dst_y) as usize).min(buffer.len() / buffer_width);
+    let dst_width_max = ((dst_width as i16 + dst_x) as usize).min(buffer_width);
+    let dst_height_max = ((dst_height as i16 + dst_y) as usize).min(buffer.len() / buffer_width);
 
     let mut src_rect = Rect {
         x_range: src_x.min(src_width_max)..src_width_max,
@@ -141,14 +141,14 @@ fn blit_ext<T: Copy, TBlittable: Blittable<T>>(
         src_rect.x_range.start = (src_rect.x_range.start + (-dst_x) as usize)
             .min(src_rect.x_range.end);
     } else {
-        dst_rect.x_range.start = ((dst_rect.x_range.start as i32 + dst_x) as usize)
+        dst_rect.x_range.start = ((dst_rect.x_range.start as i16 + dst_x) as usize)
             .min(dst_rect.x_range.end);
     }
     if dst_y < 0 {
         src_rect.y_range.start = (src_rect.y_range.start + (-dst_y) as usize)
             .min(src_rect.y_range.end);
     } else {
-        dst_rect.y_range.start = ((dst_rect.y_range.start as i32 + dst_y) as usize)
+        dst_rect.y_range.start = ((dst_rect.y_range.start as i16 + dst_y) as usize)
             .min(dst_rect.y_range.end);
     }
 
@@ -200,8 +200,8 @@ pub struct BlitBuilder<'a, T: Copy, TBlittable: Blittable<T>> {
     src_y: usize,
     src_width: usize,
     src_height: usize,
-    dst_x: i32,
-    dst_y: i32,
+    dst_x: i16,
+    dst_y: i16,
     dst_width: usize,
     dst_height: usize,
     flip: Flip
@@ -230,7 +230,7 @@ impl<'a, T: Copy, TBlittable: Blittable<T>> BlitBuilder<'a, T, TBlittable> {
     ) -> Self {
         dest.initiate_blit_on_self(src)
     }
-    pub fn with_dest_pos(self, dst_x: i32, dst_y: i32) -> Self {
+    pub fn with_dest_pos(self, dst_x: i16, dst_y: i16) -> Self {
         Self {
             dst_x,
             dst_y,
@@ -246,7 +246,7 @@ impl<'a, T: Copy, TBlittable: Blittable<T>> BlitBuilder<'a, T, TBlittable> {
             ..self
         }
     }
-    pub fn with_dest_subrect(self, dst_x: i32, dst_y: i32, dst_width: usize, dst_height: usize) -> Self {
+    pub fn with_dest_subrect(self, dst_x: i16, dst_y: i16, dst_width: usize, dst_height: usize) -> Self {
         Self {
             dst_x,
             dst_y,

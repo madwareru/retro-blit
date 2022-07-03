@@ -3,10 +3,10 @@ use crate::rendering::blittable::{BufferProviderMut, SizedSurface};
 use crate::rendering::transform::Transform;
 
 fn plot_bresenham_circle(
-    cx: i32, cy: i32, r: i32,
-    mut plot_func: impl FnMut(i32, i32) -> ()
+    cx: i16, cy: i16, r: i16,
+    mut plot_func: impl FnMut(i16, i16) -> ()
 ) {
-    fn plot_all_octants(cx: i32, cy: i32, dx: i32, dy: i32, plot_func: &mut impl FnMut(i32, i32) -> ()) {
+    fn plot_all_octants(cx: i16, cy: i16, dx: i16, dy: i16, plot_func: &mut impl FnMut(i16, i16) -> ()) {
         let (x0, x1, x2, x3, x4, x5, x6, x7) = (
             cx + dx, cx + dx, cx - dx, cx - dx, cx + dy, cx + dy, cx - dy, cx - dy
         );
@@ -38,7 +38,7 @@ fn plot_bresenham_circle(
     }
 }
 
-fn plot_bresenham_line<F : FnMut(i32, i32) -> ()>(x0: i32, y0: i32, x1: i32, y1: i32, mut plot_func: F) {
+fn plot_bresenham_line<F : FnMut(i16, i16) -> ()>(x0: i16, y0: i16, x1: i16, y1: i16, mut plot_func: F) {
     if y0 == y1 {
         for x in x0.min(x1)..=x0.max(x1) { plot_func(x, y0); }
     } else if x0 == x1 {
@@ -87,8 +87,8 @@ fn plot_bresenham_line<F : FnMut(i32, i32) -> ()>(x0: i32, y0: i32, x1: i32, y1:
 pub struct BresenhamCircleDrawer<'a, T: Copy> {
     buffer: &'a mut [T],
     buffer_width: usize,
-    position: (i32, i32),
-    radius: i32
+    position: (i16, i16),
+    radius: i16
 }
 
 impl<'a, T: Copy> BresenhamCircleDrawer<'a, T> {
@@ -103,11 +103,11 @@ impl<'a, T: Copy> BresenhamCircleDrawer<'a, T> {
         }
     }
 
-    pub fn with_position(self, position: (i32, i32)) -> Self {
+    pub fn with_position(self, position: (i16, i16)) -> Self {
         Self { position, ..self }
     }
 
-    pub fn with_radius(self, radius: i32) -> Self {
+    pub fn with_radius(self, radius: i16) -> Self {
         Self { radius, ..self }
     }
 
@@ -118,10 +118,10 @@ impl<'a, T: Copy> BresenhamCircleDrawer<'a, T> {
             self.position.1,
             self.radius,
             |x, y| {
-                if !(0..self.buffer_width as i32).contains(&x) {
+                if !(0..self.buffer_width as i16).contains(&x) {
                     return;
                 }
-                if !(0..buffer_height as i32).contains(&y) {
+                if !(0..buffer_height as i16).contains(&y) {
                     return;
                 }
                 self.buffer[x as usize + y as usize * self.buffer_width] = color;
@@ -134,7 +134,8 @@ pub struct LineStripRasterizer<'a, T: Copy + Default>  {
     buffer: &'a mut [T],
     buffer_width: usize,
     transform: Transform,
-    color: T
+    color: T,
+    closed: bool
 }
 impl<'a, T: Copy + Default> LineStripRasterizer<'a, T> {
     pub fn create(buffer_provider: &'a mut (impl BufferProviderMut<T>+SizedSurface)) -> Self {
@@ -144,7 +145,8 @@ impl<'a, T: Copy + Default> LineStripRasterizer<'a, T> {
             buffer,
             buffer_width,
             transform: Transform::from_identity(),
-            color: Default::default()
+            color: Default::default(),
+            closed: false
         }
     }
 
@@ -162,7 +164,14 @@ impl<'a, T: Copy + Default> LineStripRasterizer<'a, T> {
         }
     }
 
-    pub fn with_translation(self, translation: (i32, i32)) -> Self {
+    pub fn closed(self) -> Self {
+        Self {
+            closed: true,
+            ..self
+        }
+    }
+
+    pub fn with_translation(self, translation: (i16, i16)) -> Self {
         Self {
             transform: self.transform.with_translation(translation),
             ..self
@@ -183,18 +192,18 @@ impl<'a, T: Copy + Default> LineStripRasterizer<'a, T> {
         }
     }
 
-    fn get_transformed_positions(&self, positions: [(i32, i32); 2]) -> [(i32, i32); 2] {
+    fn get_transformed_positions(&self, positions: [(i16, i16); 2]) -> [(i16, i16); 2] {
         positions.map(|it| {
             let p = self.transform.matrix * vec3a(it.0 as f32 + 0.5, it.1 as f32 + 0.5, 1.0);
-            (p.x.floor() as i32, p.y.floor() as i32)
+            (p.x.floor() as i16, p.y.floor() as i16)
         })
     }
 
-    pub fn rasterize_slice(self, closed: bool, positions: &[(i32, i32)]) {
+    pub fn rasterize_slice(self, positions: &[(i16, i16)]) {
         if positions.len() <= 1 {
             return;
         }
-        if closed {
+        if self.closed {
             for i in 1..=positions.len() {
                 let next = self.get_transformed_positions(
                     [
@@ -228,8 +237,8 @@ impl<'a, T: Copy + Default> LineStripRasterizer<'a, T> {
 pub struct LineRasterizer<'a, T: Copy> {
     buffer: &'a mut [T],
     buffer_width: usize,
-    from: (i32, i32),
-    to: (i32, i32)
+    from: (i16, i16),
+    to: (i16, i16)
 }
 
 impl<'a, T: Copy> LineRasterizer<'a, T> {
@@ -253,11 +262,11 @@ impl<'a, T: Copy> LineRasterizer<'a, T> {
         }
     }
 
-    pub fn from(self, from: (i32, i32)) -> Self {
+    pub fn from(self, from: (i16, i16)) -> Self {
         Self { from, ..self }
     }
 
-    pub fn to(self, to: (i32, i32)) -> Self {
+    pub fn to(self, to: (i16, i16)) -> Self {
         Self { to, ..self }
     }
 
@@ -269,8 +278,8 @@ impl<'a, T: Copy> LineRasterizer<'a, T> {
             self.to.0,
             self.to.1,
             |x, y| {
-                if (0..self.buffer_width as i32).contains(&x) &&
-                    (0..buffer_height as i32).contains(&y)
+                if (0..self.buffer_width as i16).contains(&x) &&
+                    (0..buffer_height as i16).contains(&y)
                 {
                     self.buffer[x as usize + y as usize * self.buffer_width] = color;
                 }

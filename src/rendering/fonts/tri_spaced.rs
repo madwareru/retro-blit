@@ -90,13 +90,13 @@ pub trait TextDrawer<Destination> {
 
     fn draw_text(
         &self, destination: &mut Destination,
-        x: i32, y: i32, text: &str,
+        x: i16, y: i16, text: &str,
         color_tint_idx: Option<u8>
     );
 
     fn draw_text_in_box(
         &self, destination: &mut Destination,
-        x: i32, y: i32,
+        x: i16, y: i16,
         box_width: usize, box_height: usize,
         horizontal_alignment: HorizontalAlignment,
         vertical_alignment: VerticalAlignment,
@@ -108,17 +108,17 @@ pub trait TextDrawer<Destination> {
 macro_rules! impl_text_drawer {
     ($dest_type: ident) => {
         impl TextDrawer<$dest_type> for Font {
-            fn draw_text(&self, destination: &mut $dest_type, x: i32, y: i32, text: &str, color_tint_idx: Option<u8>) {
+            fn draw_text(&self, destination: &mut $dest_type, x: i16, y: i16, text: &str, color_tint_idx: Option<u8>) {
                 let height = self.font_info.glyph_grid_step_y;
-                let mut current_y = y - (self.font_info.upper_cap_offset as i32);
+                let mut current_y = y - (self.font_info.upper_cap_offset as i16);
                 let mut current_x = x;
                 for c in text.chars() {
                     if c.is_ascii_whitespace() {
                         if c == ' ' {
-                            current_x += self.font_info.glyph_grid_step_x as i32;
+                            current_x += self.font_info.glyph_grid_step_x as i16;
                         } else if c == '\n' {
                             current_x = x;
-                            current_y += height as i32;
+                            current_y += height as i16;
                         }
                         continue;
                     }
@@ -143,14 +143,14 @@ macro_rules! impl_text_drawer {
                         }
                     }
 
-                    current_x += width as i32;
+                    current_x += width as i16;
                 }
             }
 
-            fn draw_text_in_box(&self, destination: &mut $dest_type, x: i32, y: i32, box_width: usize, box_height: usize, horizontal_alignment: HorizontalAlignment, vertical_alignment: VerticalAlignment, text: &str, color_tint_idx: Option<u8>) {
+            fn draw_text_in_box(&self, destination: &mut $dest_type, x: i16, y: i16, box_width: usize, box_height: usize, horizontal_alignment: HorizontalAlignment, vertical_alignment: VerticalAlignment, text: &str, color_tint_idx: Option<u8>) {
                 struct LineInfo {
                     word_count: usize,
-                    empty_space: i32
+                    empty_space: i16
                 }
 
                 let mut line_words = bumpalo::collections::Vec::new_in(&self.arena);
@@ -175,13 +175,13 @@ macro_rules! impl_text_drawer {
 
                         if next_x > box_width {
                             if current_words == 0 {
-                                line_info_vec.push(LineInfo { word_count: 1, empty_space: box_width as i32 - next_x as i32 });
+                                line_info_vec.push(LineInfo { word_count: 1, empty_space: box_width as i16 - next_x as i16 });
                                 current_x = 0;
                             } else {
                                 line_info_vec.push(
                                     LineInfo {
                                         word_count: current_words,
-                                        empty_space: box_width as i32 - current_x as i32
+                                        empty_space: box_width as i16 - current_x as i16
                                     }
                                 );
                                 current_x = new_width;
@@ -197,7 +197,7 @@ macro_rules! impl_text_drawer {
                         line_info_vec.push(
                             LineInfo {
                                 word_count: current_words,
-                                empty_space: box_width as i32 - current_x as i32
+                                empty_space: box_width as i16 - current_x as i16
                             }
                         );
                     }
@@ -205,16 +205,16 @@ macro_rules! impl_text_drawer {
 
                 let mut words = text.split_ascii_whitespace();
 
-                let height = self.font_info.glyph_grid_step_y as i32;
+                let height = self.font_info.glyph_grid_step_y as i16;
                 let result_height = self.font_info.glyph_grid_step_y * line_info_vec.len() -
                     (self.font_info.glyph_grid_step_y - self.font_info.base_line_offset);
                 let mut current_y = y + match vertical_alignment {
                     VerticalAlignment::Top => 0,
                     VerticalAlignment::Center =>
-                        (box_height / 2) as i32 -
-                            (result_height / 2) as i32,
+                        (box_height / 2) as i16 -
+                            (result_height / 2) as i16,
                     VerticalAlignment::Bottom =>
-                        box_height as i32 - result_height as i32
+                        box_height as i16 - result_height as i16
                 };
                 for LineInfo{ word_count, empty_space } in line_info_vec.iter() {
                     let mut current_x = x + match horizontal_alignment {
@@ -225,10 +225,10 @@ macro_rules! impl_text_drawer {
                     for i in 0..*word_count {
                         if let Some(word) = words.next() {
                             if i != 0 {
-                                current_x += self.font_info.glyph_grid_step_x as i32;
+                                current_x += self.font_info.glyph_grid_step_x as i16;
                             }
                             self.draw_text(destination, current_x, current_y, word, color_tint_idx);
-                            current_x += self.font_info.measure_word_width(word) as i32;
+                            current_x += self.font_info.measure_word_width(word) as i16;
                         }
                     }
                     current_y += height;

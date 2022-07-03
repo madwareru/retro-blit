@@ -37,7 +37,7 @@ struct MyGame {
     font: Font,
     level: [[Tile; 5]; 5],
     button_pressed: bool,
-    poly_line_positions: Vec<(i32, i32)>,
+    poly_line_positions: Vec<(i16, i16)>,
     poly_line_vertices: Vec<Vertex>,
     poly_line_indices: Vec<u16>
 }
@@ -108,7 +108,7 @@ impl ContextHandler for MyGame {
         }
     }
 
-    fn update(&mut self, ctx: &mut RetroBlitContext) {
+    fn update(&mut self, ctx: &mut RetroBlitContext, _dt: f32) {
         ctx.clear(1);
 
         let sprite_sheet_with_color_key = self
@@ -116,9 +116,9 @@ impl ContextHandler for MyGame {
             .with_color_key(0);
 
         for j in 0..5 {
-            let y_coord = 44 + (j as i32) * 20;
+            let y_coord = 44 + (j as i16) * 20;
             for i in 0..5 {
-                let x_coord = 100 + (i as i32) * 24;
+                let x_coord = 100 + (i as i16) * 24;
                 let (tx, ty) = self.level[j][i].to_tile_coords();
                 BlitBuilder::create(ctx, &sprite_sheet_with_color_key)
                     .with_source_subrect(tx, ty, 24, 32)
@@ -161,7 +161,8 @@ impl ContextHandler for MyGame {
             .with_color(31)
             .with_rotation((offset_as_a_turtle as f32 / 3.0).to_radians())
             .with_translation((64, 64))
-            .rasterize_slice(true, &self.poly_line_positions);
+            .closed()
+            .rasterize_slice(&self.poly_line_positions);
 
         {
             let transform = Transform::from_angle_translation_scale(

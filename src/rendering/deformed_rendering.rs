@@ -3,11 +3,11 @@ use crate::rendering::blittable::{Blittable, BufferProviderMut, SizedSurface};
 use crate::rendering::transform::Transform;
 
 pub struct Vertex {
-    pub position: (i32, i32)
+    pub position: (i16, i16)
 }
 
 pub struct TexturedVertex {
-    pub position: (i32, i32),
+    pub position: (i16, i16),
     pub uv: (u16, u16)
 }
 
@@ -37,7 +37,7 @@ impl<'a, T: Copy> TriangleRasterizer<'a, T> {
         }
     }
 
-    pub fn with_translation(self, translation: (i32, i32)) -> Self {
+    pub fn with_translation(self, translation: (i16, i16)) -> Self {
         Self {
             transform: self.transform.with_translation(translation),
             ..self
@@ -58,7 +58,7 @@ impl<'a, T: Copy> TriangleRasterizer<'a, T> {
         }
     }
 
-    fn is_degrade_triangle(&self, positions: [(i32, i32); 3]) -> bool {
+    fn is_degrade_triangle(&self, positions: [(i16, i16); 3]) -> bool {
         positions[0] == positions[1] ||
             positions[1] == positions[2] ||
             positions[2] == positions[0] ||
@@ -103,14 +103,14 @@ impl<'a, T: Copy> TriangleRasterizer<'a, T> {
                 positions
             };
 
-            if top_pos.1 as i32 == middle_pos.1 as i32 {
+            if top_pos.1 as i16 == middle_pos.1 as i16 {
                 self.draw_flat_top_colored(
                     color,
                     top_pos,
                     middle_pos,
                     bottom_pos
                 );
-            } else if bottom_pos.1 as i32 == middle_pos.1 as i32 {
+            } else if bottom_pos.1 as i16 == middle_pos.1 as i16 {
                 self.draw_flat_bottom_colored(
                     color,
                     top_pos,
@@ -149,10 +149,10 @@ impl<'a, T: Copy> TriangleRasterizer<'a, T> {
         let ((mut x0, _), (mut x1, _)) = (middle_pos, middle_pos);
         let ( dx0, dx1, dy ) = (
             left_pos.0 - middle_pos.0, right_pos.0 - middle_pos.0,
-            (left_pos.1 as i32 - middle_pos.1 as i32) as f32
+            (left_pos.1 as i16 - middle_pos.1 as i16) as f32
         );
         let (dx0, dx1) = (dx0 / dy, dx1 / dy);
-        for y in middle_pos.1 as i32..=left_pos.1 as i32 {
+        for y in middle_pos.1 as i16..=left_pos.1 as i16 {
             self.draw_span_colored(color, x0, x1, y);
             x0 += dx0;
             x1 += dx1;
@@ -170,20 +170,20 @@ impl<'a, T: Copy> TriangleRasterizer<'a, T> {
         let ((mut x0, _), (mut x1, _)) = (left_pos, right_pos);
         let (dx0, dx1, dy) = (
             middle_pos.0 - left_pos.0, middle_pos.0 - right_pos.0,
-            (middle_pos.1 as i32 - left_pos.1 as i32) as f32
+            (middle_pos.1 as i16 - left_pos.1 as i16) as f32
         );
         let (dx0, dx1) = (dx0 / dy, dx1 / dy);
-        for y in left_pos.1 as i32..=middle_pos.1 as i32 {
+        for y in left_pos.1 as i16..=middle_pos.1 as i16 {
             self.draw_span_colored(color, x0, x1, y);
             x0 += dx0;
             x1 += dx1;
         }
     }
-    fn draw_span_colored(&mut self, color: T, x0: f32, x1: f32, y: i32) {
+    fn draw_span_colored(&mut self, color: T, x0: f32, x1: f32, y: i16) {
         if x1 < 0.0 || x0 >= self.buffer_width as f32 {
             return;
         }
-        if (0..(self.buffer_height) as i32).contains(&y) {
+        if (0..(self.buffer_height) as i16).contains(&y) {
             let stride = y as usize * self.buffer_width;
             let span_left = stride + x0.max(0.0) as usize;
             let span_right = stride + ((x1 + 0.15) as usize).min(self.buffer_width - 1);
@@ -236,7 +236,7 @@ impl<'a, T: Copy> TriangleRasterizer<'a, T> {
                 )
             };
 
-            if top_pos.1 as i32 == middle_pos.1 as i32 {
+            if top_pos.1 as i16 == middle_pos.1 as i16 {
                 self.draw_flat_top_with_surface(
                     drawable,
                     top_pos,
@@ -246,7 +246,7 @@ impl<'a, T: Copy> TriangleRasterizer<'a, T> {
                     middle_uv,
                     bottom_uv
                 );
-            } else if bottom_pos.1 as i32 == middle_pos.1 as i32 {
+            } else if bottom_pos.1 as i16 == middle_pos.1 as i16 {
                 self.draw_flat_bottom_with_surface(
                     drawable,
                     top_pos,
@@ -308,7 +308,7 @@ impl<'a, T: Copy> TriangleRasterizer<'a, T> {
             right_uv.1 - middle_uv.1
         ) / (left_pos.1 - middle_pos.1);
 
-        for y in middle_pos.1 as i32..=left_pos.1 as i32 {
+        for y in middle_pos.1 as i16..=left_pos.1 as i16 {
             self.draw_span(drawable, interpolator_0, interpolator_1, y);
             interpolator_0 += delta_0;
             interpolator_1 += delta_1;
@@ -345,7 +345,7 @@ impl<'a, T: Copy> TriangleRasterizer<'a, T> {
              middle_uv.1 - right_uv.1
         ) / (middle_pos.1 - left_pos.1);
 
-        for y in left_pos.1 as i32..=middle_pos.1 as i32 {
+        for y in left_pos.1 as i16..=middle_pos.1 as i16 {
             self.draw_span(drawable, interpolator_0, interpolator_1, y);
             interpolator_0 += delta_0;
             interpolator_1 += delta_1;
@@ -357,12 +357,12 @@ impl<'a, T: Copy> TriangleRasterizer<'a, T> {
         drawable: &impl Blittable<T>,
         interpolator_0: Vec3A,
         interpolator_1: Vec3A,
-        y: i32
+        y: i16
     ) {
         if interpolator_0.x >= (self.buffer_width - 1) as f32 || interpolator_1.x < 0.0 {
             return;
         }
-        if (0..(self.buffer_height) as i32).contains(&y) {
+        if (0..(self.buffer_height) as i16).contains(&y) {
             let stride = y as usize * self.buffer_width;
             let x0 = interpolator_0.x.clamp(0.0, (self.buffer_width - 1) as f32);
             let x1 = (interpolator_1.x + 0.15).clamp(0.0, (self.buffer_width - 1) as f32);
@@ -390,7 +390,7 @@ impl<'a, T: Copy> TriangleRasterizer<'a, T> {
             }
         }
     }
-    fn get_transformed_positions(&self, positions: [(i32, i32); 3]) -> [(f32, f32); 3] {
+    fn get_transformed_positions(&self, positions: [(i16, i16); 3]) -> [(f32, f32); 3] {
         positions.map(|it| {
             let p = self.transform.matrix * vec3a(it.0 as f32 + 0.5, it.1 as f32 + 0.5, 1.0);
             (p.x.floor() + 0.5, p.y.floor() + 0.5)

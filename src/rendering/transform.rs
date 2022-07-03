@@ -2,7 +2,7 @@ use glam::{Mat3A, vec2};
 
 #[derive(Copy, Clone)]
 pub struct Transform {
-    translation: (i32, i32),
+    translation: (i16, i16),
     rotation: f32,
     scale: (f32, f32),
     pub(crate) matrix: Mat3A
@@ -21,7 +21,7 @@ impl Transform {
             matrix
         }
     }
-    pub fn from_translation(x: i32, y: i32) -> Self {
+    pub fn from_translation(x: i16, y: i16) -> Self {
         let translation = (x, y);
         let rotation = 0.0;
         let scale = (1.0, 1.0);
@@ -33,7 +33,7 @@ impl Transform {
             matrix
         }
     }
-    pub fn from_angle_and_translation(angle: f32, x: i32, y: i32) -> Self {
+    pub fn from_angle_and_translation(angle: f32, x: i16, y: i16) -> Self {
         let translation = (x, y);
         let rotation = angle;
         let scale = (1.0, 1.0);
@@ -46,7 +46,7 @@ impl Transform {
             matrix
         }
     }
-    pub fn from_angle_translation_scale(angle: f32, translation: (i32, i32), scale: (f32, f32)) -> Self {
+    pub fn from_angle_translation_scale(angle: f32, translation: (i16, i16), scale: (f32, f32)) -> Self {
         let rotation = angle;
         let matrix = Mat3A::from_translation(vec2(translation.0 as f32, translation.1 as f32)) *
             Mat3A::from_angle(rotation) *
@@ -67,7 +67,7 @@ impl Transform {
             ..self
         }
     }
-    pub fn with_translation(self, translation: (i32, i32)) -> Self {
+    pub fn with_translation(self, translation: (i16, i16)) -> Self {
         Self {
             translation,
             matrix: Mat3A::from_translation(vec2(translation.0 as f32, translation.1 as f32)) *
@@ -103,7 +103,7 @@ impl Transform {
         self.actualize_matrix();
     }
 
-    pub fn set_translation(&mut self, translation: (i32, i32)) {
+    pub fn set_translation(&mut self, translation: (i16, i16)) {
         self.translation = translation;
         self.actualize_matrix();
     }

@@ -22,7 +22,7 @@ impl PathTessellator {
         &mut self,
         vertices_to_extend: &mut Vec<Vertex>,
         indices_to_extend: &mut Vec<u16>,
-        positions: &[(i32, i32)]
+        positions: &[(i16, i16)]
     ) {
         if positions.len() <= 1 {
             return;
@@ -54,7 +54,7 @@ impl PathTessellator {
         }
 
         for vertex in self.buffers.vertices.iter() {
-            vertices_to_extend.push(Vertex { position: (vertex.x as i32, vertex.y as i32) })
+            vertices_to_extend.push(Vertex { position: (vertex.x as i16, vertex.y as i16) })
         }
         indices_to_extend.extend(self.buffers.indices.iter());
     }

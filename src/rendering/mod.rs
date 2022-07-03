@@ -4,6 +4,7 @@ pub mod deformed_rendering;
 pub mod bresenham;
 pub mod tessellation;
 pub mod transform;
+pub mod shapes;
 
 use crate::format_loaders::bmp_256::Bmp;
 use crate::format_loaders::im_256::Image;
