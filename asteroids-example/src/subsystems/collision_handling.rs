@@ -1,7 +1,13 @@
 use hecs::Entity;
 use rand::Rng;
-use retro_blit::math_utils::collision_queries::{PointInPolyQuery, PolyIntersectionQuery, SegmentPolyIntersectionQuery};
-use retro_blit::rendering::transform::Transform;
+use retro_blit::{
+    math_utils::collision_queries::{
+        PointInPolyQuery,
+        PolyIntersectionQuery,
+        SegmentPolyIntersectionQuery
+    },
+    rendering::transform::Transform
+};
 use crate::{
     components::*,
     constants::*,
@@ -22,14 +28,15 @@ impl DemoGame {
                     let segment = Self::make_bullet_segment(position, velocity);
                     for (other_h, _) in self.spatial_map.query_around(
                         [position.x, position.y],
-                        32.0
+                        64.0
                     ) {
-                        if let Some((other_position, &other_entity)) = self.spatial_map.get(other_h) {
+                        if let Some((_, &other_entity)) = self.spatial_map.get(other_h) {
                             match (
                                 self.ecs_world.get::<Asteroid>(other_entity),
+                                self.ecs_world.get::<Position>(other_entity),
                                 self.ecs_world.get::<Rotation>(other_entity)
                             ) {
-                                (Ok(asteroid), Ok(rotation)) => {
+                                (Ok(asteroid), Ok(other_position), Ok(rotation)) => {
                                     let transform = Transform::from_angle_translation_scale(
                                         rotation.angle,
                                         (other_position.x as i16, other_position.y as i16),
@@ -86,14 +93,15 @@ impl DemoGame {
                         player_position.x as i16,
                         player_position.y as i16
                     );
-                    for (other_position, &other_entity) in self.spatial_map
-                        .query_around([player_position.x, player_position.y], 32.0)
+                    for (_, &other_entity) in self.spatial_map
+                        .query_around([player_position.x, player_position.y], 64.0)
                         .filter_map(|it | self.spatial_map.get(it.0)) {
                         match (
                             self.ecs_world.get::<Asteroid>(other_entity),
+                            self.ecs_world.get::<Position>(other_entity),
                             self.ecs_world.get::<Rotation>(other_entity)
                         ) {
-                            (Ok(asteroid), Ok(rotation)) => {
+                            (Ok(asteroid), Ok(other_position), Ok(rotation)) => {
                                 let asteroid_transform = Transform::from_angle_translation_scale(
                                     rotation.angle,
                                     (other_position.x as i16, other_position.y as i16),

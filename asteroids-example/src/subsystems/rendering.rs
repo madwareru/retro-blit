@@ -1,5 +1,5 @@
 use retro_blit::rendering::blittable::BlitBuilder;
-use retro_blit::rendering::bresenham::LineRasterizer;
+use retro_blit::rendering::bresenham::{LineRasterizer};
 use retro_blit::rendering::deformed_rendering::TriangleRasterizer;
 use retro_blit::rendering::fonts::font_align::{HorizontalAlignment, VerticalAlignment};
 use retro_blit::rendering::fonts::tri_spaced::TextDrawer;
@@ -86,7 +86,8 @@ impl DemoGame {
         { // draw asteroids
             for (_, (&Asteroid { kind, size, .. }, pos, rotation)) in self.ecs_world
                 .query::<(&Asteroid, &Position, &Rotation)>()
-                .iter() {
+                .iter()
+            {
                 let (vertices, indices) = match kind {
                     AsteroidKind::Round => (
                         &self.round_asteroid_vertices,

@@ -8,12 +8,12 @@ use retro_blit::{
 };
 use retro_blit::rendering::BlittableSurface;
 use retro_blit::rendering::fonts::tri_spaced::Font;
+use crate::components::{Asteroid, Position, SpatialHandle, Velocity};
+use crate::constants::{PLAYER_POINTS, PLAYER_SCRAP_POINTS, ROCKY_ASTEROID_POINTS, ROUND_ASTEROID_POINTS, SQUARE_ASTEROID_POINTS, STAR_SKY_SPRITE_BYTES};
 
 mod constants;
 mod components;
 mod subsystems;
-use crate::constants::*;
-use crate::components::*;
 
 pub struct DemoGame {
     pub player_hp: u8,
@@ -82,11 +82,11 @@ impl retro_blit::window::ContextHandler for DemoGame {
 
     fn update(&mut self, ctx: &mut RetroBlitContext, dt: f32) {
         self.update_star_sky(ctx, dt);
+        self.update_bullet_collisions();
+        self.update_player_collisions();
         self.update_object_positions(dt);
         self.update_space_partitioning();
         self.update_life_spans(dt);
-        self.update_bullet_collisions();
-        self.update_player_collisions();
         self.update_fire_cool_downs(dt);
         self.update_revive_cool_down(dt);
         self.update_player_controls(ctx, dt);

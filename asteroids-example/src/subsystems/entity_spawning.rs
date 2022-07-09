@@ -63,5 +63,4 @@ impl DemoGame {
         let handle = self.spatial_map.insert([position.x, position.y], asteroid_entity);
         self.ecs_world.insert(asteroid_entity, (SpatialHandle { handle }, )).unwrap();
     }
-
 }
