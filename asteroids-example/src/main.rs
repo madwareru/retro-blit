@@ -47,7 +47,8 @@ pub struct DemoGame {
     pub flicker_dt_accumulated: f32,
     pub music_handle: Option<usize>,
     pub has_sounds: bool,
-    pub mute_sounds: bool
+    pub mute_sounds: bool,
+    volume: f32
 }
 
 impl retro_blit::window::ContextHandler for DemoGame {
@@ -102,13 +103,25 @@ impl retro_blit::window::ContextHandler for DemoGame {
         match key_code {
             KeyCode::M => {
                 self.mute_sounds = !self.mute_sounds;
-                if self.mute_sounds {
-                    ctx.set_global_playback_volume(0.0);
-                } else {
-                    ctx.set_global_playback_volume(1.0);
-                }
+                update_playback_volume(ctx, self.mute_sounds, self.volume);
+            },
+            KeyCode::Minus => {
+                self.volume = (self.volume - 0.1).clamp(0.0, 1.0);
+                update_playback_volume(ctx, self.mute_sounds, self.volume);
+            },
+            KeyCode::Equal => {
+                self.volume = (self.volume + 0.1).clamp(0.0, 1.0);
+                update_playback_volume(ctx, self.mute_sounds, self.volume);
             }
             _ => ()
+        }
+
+        fn update_playback_volume(ctx: &mut RetroBlitContext, mute_sounds: bool, volume: f32) {
+            if mute_sounds {
+                ctx.set_global_playback_volume(0.0);
+            } else {
+                ctx.set_global_playback_volume(volume);
+            }
         }
     }
 
@@ -175,7 +188,8 @@ impl DemoGame {
             flicker_dt_accumulated: 0.0,
             music_handle: None,
             has_sounds: false,
-            mute_sounds: false
+            mute_sounds: false,
+            volume: 1.0
         }
     }
 
