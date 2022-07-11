@@ -5,6 +5,7 @@ use orom_miniquad::*;
 
 pub mod monitor_obj_loader;
 use monitor_obj_loader::Vec4;
+use crate::audio::{SoundDriver, SoundHandle};
 use crate::rendering::blittable::{BufferProviderMut, SizedSurface};
 use crate::math_utils::Barycentric2D;
 
@@ -148,7 +149,7 @@ pub struct KeyMods {
     pub command: bool,
 }
 
-impl std::convert::TryFrom<orom_miniquad::KeyCode> for KeyCode {
+impl TryFrom<orom_miniquad::KeyCode> for KeyCode {
     type Error = ();
 
     fn try_from(value: orom_miniquad::KeyCode) -> Result<Self, Self::Error> {
@@ -165,7 +166,7 @@ impl std::convert::TryFrom<orom_miniquad::KeyCode> for KeyCode {
             orom_miniquad::KeyCode::J => Ok(KeyCode::J),
             orom_miniquad::KeyCode::K => Ok(KeyCode::K),
             orom_miniquad::KeyCode::L => Ok(KeyCode::L),
-            orom_miniquad::KeyCode::M => Ok(KeyCode::N),
+            orom_miniquad::KeyCode::M => Ok(KeyCode::M),
             orom_miniquad::KeyCode::N => Ok(KeyCode::N),
             orom_miniquad::KeyCode::O => Ok(KeyCode::O),
             orom_miniquad::KeyCode::P => Ok(KeyCode::P),
@@ -279,6 +280,7 @@ impl std::convert::TryFrom<orom_miniquad::KeyCode> for KeyCode {
 }
 
 pub struct RetroBlitContext {
+    sound_driver: Option<SoundDriver>,
     buffer_width: usize,
     buffer_height: usize,
     colors: [u8; 256 * 3],
@@ -290,6 +292,65 @@ pub struct RetroBlitContext {
 }
 
 impl RetroBlitContext {
+    pub fn init_audio(&mut self) -> bool {
+        let sound_driver = SoundDriver::try_create();
+        match sound_driver {
+            Ok(driver) => {
+                self.sound_driver = Some(driver);
+                true
+            },
+            Err(error) => {
+                println!("Failed to init audio: {}", &error);
+                false
+            }
+        }
+    }
+
+    pub fn set_global_playback_volume(&self, volume: f32) {
+        if let Some(driver) = &self.sound_driver {
+            driver.set_global_volume(volume);
+        }
+    }
+
+    pub fn play_sound(&mut self, sound: SoundHandle) -> Option<usize> {
+        if let Some(driver) = &mut self.sound_driver {
+            return Some(driver.play_sound(sound))
+        }
+        None
+    }
+
+    pub fn playback_in_progress(&self, playback_handle: usize) -> bool {
+        if let Some(driver) = &self.sound_driver {
+            driver.playback_in_progress(playback_handle)
+        } else {
+            false
+        }
+    }
+
+    pub fn set_playback_volume(&self, playback_handle: usize, volume: f32) {
+        if let Some(driver) = &self.sound_driver {
+            driver.set_volume(playback_handle, volume);
+        }
+    }
+
+    pub fn pause_playback(&self, playback_handle: usize) {
+        if let Some(driver) = &self.sound_driver {
+            driver.pause_playback(playback_handle);
+        }
+    }
+
+    pub fn continue_playback(&self, playback_handle: usize) {
+        if let Some(driver) = &self.sound_driver {
+            driver.continue_playback(playback_handle);
+        }
+    }
+
+    pub fn stop_playback(&mut self, playback_handle: usize) {
+        if let Some(driver) = &mut self.sound_driver {
+            driver.stop_playback(playback_handle);
+        }
+    }
+
     pub fn put_pixel(&mut self, x: i16, y: i16, color: u8) {
         if (0..self.buffer_width as i16).contains(&x) && (0..self.buffer_height as i16).contains(&y) {
             let idx = y as usize * self.buffer_width + x as usize;
@@ -564,6 +625,7 @@ impl<CtxHandler: ContextHandler> Stage<CtxHandler> {
         let (buffer_width, buffer_height) = get_buffer_dimensions(&handler);
 
         let mut context_data = RetroBlitContext {
+            sound_driver: None,
             buffer_width,
             buffer_height,
             buffer_pixels: vec![0u8; buffer_width * buffer_height],
@@ -717,6 +779,9 @@ impl<CtxHandler: ContextHandler> EventHandler for Stage<CtxHandler> {
     fn update(&mut self, ctx: &mut Context) {
         let dt = self.last_instant.elapsed().as_micros() as f32 / 1000000.0;
         self.last_instant = Instant::now();
+        if let Some(driver) = &mut self.context_data.sound_driver {
+            driver.maintain();
+        }
         self.handler.update(&mut self.context_data, dt);
         self.colors_texture.update(ctx, &self.context_data.colors);
         self.buffer_texture.update(ctx, &self.context_data.buffer_pixels);

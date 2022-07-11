@@ -58,6 +58,7 @@ impl DemoGame {
                 });
 
             if let Some((position, angle)) = position_and_angle {
+                ctx.play_sound(self.sounds.laser_shot.clone());
                 self.spawn_bullet(position, angle);
             }
         }
