@@ -5,9 +5,10 @@ use orom_miniquad::*;
 
 pub mod monitor_obj_loader;
 use monitor_obj_loader::Vec4;
-use crate::audio::{SoundDriver, SoundHandle};
+use crate::audio::{SoundDriver};
 use crate::rendering::blittable::{BufferProviderMut, SizedSurface};
 use crate::math_utils::Barycentric2D;
+use crate::window::monitor_obj_loader::Mesh;
 
 const IMAGE_BYTES: &[u8] = include_bytes!("monitor_mask.png");
 
@@ -291,74 +292,6 @@ pub struct RetroBlitContext {
     key_mods_pressed: KeyMods
 }
 
-impl RetroBlitContext {
-    pub fn init_audio(&mut self) -> bool {
-        let sound_driver = SoundDriver::try_create();
-        match sound_driver {
-            Ok(driver) => {
-                self.sound_driver = Some(driver);
-                true
-            },
-            Err(error) => {
-                println!("Failed to init audio: {}", &error);
-                false
-            }
-        }
-    }
-
-    pub fn set_global_playback_volume(&self, volume: f32) {
-        if let Some(driver) = &self.sound_driver {
-            driver.set_global_volume(volume);
-        }
-    }
-
-    pub fn play_sound(&mut self, sound: SoundHandle) -> Option<usize> {
-        if let Some(driver) = &mut self.sound_driver {
-            return Some(driver.play_sound(sound))
-        }
-        None
-    }
-
-    pub fn playback_in_progress(&self, playback_handle: usize) -> bool {
-        if let Some(driver) = &self.sound_driver {
-            driver.playback_in_progress(playback_handle)
-        } else {
-            false
-        }
-    }
-
-    pub fn set_playback_volume(&self, playback_handle: usize, volume: f32) {
-        if let Some(driver) = &self.sound_driver {
-            driver.set_volume(playback_handle, volume);
-        }
-    }
-
-    pub fn pause_playback(&self, playback_handle: usize) {
-        if let Some(driver) = &self.sound_driver {
-            driver.pause_playback(playback_handle);
-        }
-    }
-
-    pub fn continue_playback(&self, playback_handle: usize) {
-        if let Some(driver) = &self.sound_driver {
-            driver.continue_playback(playback_handle);
-        }
-    }
-
-    pub fn stop_playback(&mut self, playback_handle: usize) {
-        if let Some(driver) = &mut self.sound_driver {
-            driver.stop_playback(playback_handle);
-        }
-    }
-
-    pub fn put_pixel(&mut self, x: i16, y: i16, color: u8) {
-        if (0..self.buffer_width as i16).contains(&x) && (0..self.buffer_height as i16).contains(&y) {
-            let idx = y as usize * self.buffer_width + x as usize;
-            self.get_buffer_mut()[idx] = color;
-        }
-    }
-}
-
 pub enum ScrollKind {
     AllPalette,
     Range{ start_idx: u8, len: u8 }
@@ -384,6 +317,36 @@ impl BufferProviderMut<u8> for RetroBlitContext  {
 }
 
 impl RetroBlitContext {
+
+    fn init_audio(&mut self) {
+        let sound_driver = SoundDriver::try_create();
+        match sound_driver {
+            Ok(driver) => {
+                self.sound_driver = Some(driver);
+            },
+            Err(error) => {
+                println!("Failed to init audio: {}", &error);
+            }
+        }
+    }
+
+    pub fn borrow_sound_driver(&mut self) -> Option<&mut SoundDriver> {
+        match &mut (self.sound_driver) {
+            Some(driver) => {
+                Some(driver)
+            },
+            _ => {
+                None
+            }
+        }
+    }
+
+    pub fn put_pixel(&mut self, x: i16, y: i16, color: u8) {
+        if (0..self.buffer_width as i16).contains(&x) && (0..self.buffer_height as i16).contains(&y) {
+            let idx = y as usize * self.buffer_width + x as usize;
+            self.get_buffer_mut()[idx] = color;
+        }
+    }
 
     pub fn clear(&mut self, color_idx: u8) {
         for pixel in self.buffer_pixels.iter_mut() {
@@ -483,51 +446,63 @@ pub struct Stage<CtxHandler: ContextHandler> {
 
 impl<CtxHandler: ContextHandler> Stage<CtxHandler> {
     pub fn new(ctx: &mut Context, handler: CtxHandler) -> Stage<CtxHandler> {
-        // it's okay to crash here since we can't do anything useful without monitor models
-        // And still it will print a meaningful message, so we leave it like this
-        let monitor_models = monitor_obj_loader::Mesh::load_meshes().unwrap();
+        let (mask_mesh, screen_mesh) = match handler.get_window_mode() {
+            WindowMode::ModeX | WindowMode::Mode13 => {
+                // it's okay to crash here since we can't do anything useful without monitor models
+                // And still it will print a meaningful message, so we leave it like this
+                let monitor_models = monitor_obj_loader::Mesh::load_meshes().unwrap();
+                let mut mask_mesh = monitor_models.get("mask").unwrap().clone();
+                let mut screen_mesh = monitor_models.get("screen").unwrap().clone();
 
-        let mut mask_mesh = monitor_models.get("mask").unwrap().clone();
-        let mut screen_mesh = monitor_models.get("screen").unwrap().clone();
+                let cs_t = (-0.0025f32).cos();
+                let sn_t = (-0.0025f32).sin();
+
+                for v in mask_mesh.vertices.iter_mut() {
+                    let Vec4 { x, z, .. } = v.position;
+                    v.position.x = -z;
+                    v.position.z = x;
+                    v.position.x *= 0.75;
+                    v.position.y *= 0.75;
+                    v.position.z *= 0.75;
+
+                    //we need to slightly rotate screen to align it with a screen
+                    let x_new = v.position.x * cs_t - v.position.y * sn_t;
+                    let y_new = v.position.x * sn_t + v.position.y * cs_t;
+
+                    v.position.x = x_new;
+                    v.position.y = y_new;
+                }
+
+                for v in screen_mesh.vertices.iter_mut() {
+                    let Vec4 { x, z, .. } = v.position;
+                    v.position.x = -z;
+                    v.position.z = x;
+                    v.position.x *= 0.75;
+                    v.position.y *= 0.75;
+                    v.position.z *= 0.75;
+
+                    let d_x = v.uv.x - 0.5;
+                    let d_y = v.uv.y - 0.5;
+                    let curvature_x = (1.0 - d_x * d_x * 4.0 ) * d_y / 40.0;
+                    let curvature_y = (1.0 - d_y * d_y * 4.0 ) * d_x / 40.0;
+
+                    v.position.x += curvature_y;
+                    v.position.y += curvature_x;
+                }
+                (mask_mesh, screen_mesh)
+            },
+            WindowMode::Mode13Frameless | WindowMode::ModeXFrameless => (
+                Mesh::make_empty(),
+                Mesh::make_3x4()
+            ),
+            WindowMode::Mode64x64 | WindowMode::Mode128x128 | WindowMode::Mode256x256 => (
+                Mesh::make_empty(),
+                Mesh::make_square()
+            )
+        };
 
         let mask_vertices_count = mask_mesh.vertices.len();
         let screen_vertices_count = screen_mesh.vertices.len();
-
-        let cs_t = (-0.0025f32).cos();
-        let sn_t = (-0.0025f32).sin();
-
-        for v in mask_mesh.vertices.iter_mut() {
-            let Vec4 { x, z, .. } = v.position;
-            v.position.x = -z;
-            v.position.z = x;
-            v.position.x *= 0.75;
-            v.position.y *= 0.75;
-            v.position.z *= 0.75;
-
-            //we need to slightly rotate screen to align it with a screen
-            let x_new = v.position.x * cs_t - v.position.y * sn_t;
-            let y_new = v.position.x * sn_t + v.position.y * cs_t;
-
-            v.position.x = x_new;
-            v.position.y = y_new;
-        }
-
-        for v in screen_mesh.vertices.iter_mut() {
-            let Vec4 { x, z, .. } = v.position;
-            v.position.x = -z;
-            v.position.z = x;
-            v.position.x *= 0.75;
-            v.position.y *= 0.75;
-            v.position.z *= 0.75;
-
-            let d_x = v.uv.x - 0.5;
-            let d_y = v.uv.y - 0.5;
-            let curvature_x = (1.0 - d_x * d_x * 4.0 ) * d_y / 40.0;
-            let curvature_y = (1.0 - d_y * d_y * 4.0 ) * d_x / 40.0;
-
-            v.position.x += curvature_y;
-            v.position.y += curvature_x;
-        }
 
         let mask_vertex_buffer = Buffer::immutable(
             ctx,
@@ -578,11 +553,13 @@ impl<CtxHandler: ContextHandler> Stage<CtxHandler> {
             images: vec![mask_texture]
         };
 
+        let (rtw, rth) = handler.get_window_mode().get_render_texture_dimensions();
+
         let render_target_tex = Texture::new_render_texture(
             ctx,
             TextureParams {
-                width: 1600,
-                height: 1200,
+                width: rtw as _,
+                height: rth as _,
                 format: TextureFormat::RGBA8,
                 ..TextureParams::default()
             }
@@ -640,6 +617,7 @@ impl<CtxHandler: ContextHandler> Stage<CtxHandler> {
                 command: false
             }
         };
+        context_data.init_audio();
 
         let mut handler = handler;
         handler.init(&mut context_data);
@@ -1059,13 +1037,35 @@ mod screen_shader {
 #[derive(Copy, Clone)]
 pub enum WindowMode {
     Mode13,
-    ModeX
+    ModeX,
+    Mode13Frameless,
+    ModeXFrameless,
+    Mode64x64,
+    Mode128x128,
+    Mode256x256
 }
 impl WindowMode {
+    fn get_render_texture_dimensions(&self) -> (usize, usize) {
+        match self {
+            WindowMode::Mode13 => (1600, 1200),
+            WindowMode::ModeX => (1600, 1200),
+            WindowMode::Mode13Frameless => (1600, 1200),
+            WindowMode::ModeXFrameless => (1600, 1200),
+            WindowMode::Mode64x64 => (2048, 2048),
+            WindowMode::Mode128x128 => (2048, 2048),
+            WindowMode::Mode256x256 => (2048, 2048),
+        }
+    }
+
     fn get_buffer_dimensions(&self) -> (usize, usize) {
         match self {
             WindowMode::Mode13 => (320, 200),
-            WindowMode::ModeX => (320, 240)
+            WindowMode::ModeX => (320, 240),
+            WindowMode::Mode13Frameless => (320, 200),
+            WindowMode::ModeXFrameless => (320, 240),
+            WindowMode::Mode64x64 => (64, 64),
+            WindowMode::Mode128x128 => (128, 128),
+            WindowMode::Mode256x256 => (256, 256),
         }
     }
 }

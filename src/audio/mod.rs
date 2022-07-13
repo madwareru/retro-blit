@@ -51,7 +51,7 @@ impl SoundDriver {
     }
 
     pub fn set_global_volume(&self, volume: f32) {
-        self.global_sink.set_volume(volume);
+        self.global_sink.set_volume(volume * volume);
     }
 
     pub fn play_sound(&mut self, sound: SoundHandle) -> usize
@@ -85,7 +85,7 @@ impl SoundDriver {
     pub fn set_volume(&self, play_handle: usize, volume: f32) {
         if play_handle >= self.active_sounds.len() { return; }
         if let Some(sink) = &self.active_sounds[play_handle] {
-            sink.set_volume(volume);
+            sink.set_volume(volume * volume);
         }
     }
 

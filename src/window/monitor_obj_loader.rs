@@ -198,6 +198,53 @@ impl Mesh {
         Ok(result)
     }
 
+    pub fn make_empty() -> Mesh {
+        Self::make_mesh(&[], &[], &[])
+    }
+
+    pub fn make_square() -> Mesh {
+        Self::make_mesh(
+            &[
+                [-1.0, -1.0, 0.0],
+                [ 1.0,  1.0, 0.0],
+                [-1.0,  1.0, 0.0],
+                [ 1.0, -1.0, 0.0],
+            ],
+            &[
+                [0.0, 0.0],
+                [1.0, 1.0],
+                [0.0, 1.0],
+                [1.0, 0.0],
+            ],
+            &[
+                [(1, 1), (2, 2), (3, 3)],
+                [(1, 1), (4, 4), (2, 2)],
+            ]
+        )
+    }
+
+    pub fn make_3x4() -> Mesh {
+        const ASPECT_X: f32 = 4.0 / 3.0;
+        Self::make_mesh(
+            &[
+                [-ASPECT_X, -1.0, 0.0],
+                [ ASPECT_X,  1.0, 0.0],
+                [-ASPECT_X,  1.0, 0.0],
+                [ ASPECT_X, -1.0, 0.0],
+            ],
+            &[
+                [0.0, 0.0],
+                [1.0, 1.0],
+                [0.0, 1.0],
+                [1.0, 0.0],
+            ],
+            &[
+                [(1, 1), (2, 2), (3, 3)],
+                [(1, 1), (4, 4), (2, 2)],
+            ]
+        )
+    }
+
     fn make_mesh(positions: &[[f32; 3]], uvs: &[[f32; 2]], faces: &[[(usize, usize); 3]]) -> Mesh {
         let vertices = faces
             .iter()

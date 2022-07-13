@@ -46,7 +46,6 @@ pub struct DemoGame {
     pub font: Font,
     pub flicker_dt_accumulated: f32,
     pub music_handle: Option<usize>,
-    pub has_sounds: bool,
     pub mute_sounds: bool,
     volume: f32
 }
@@ -54,7 +53,35 @@ pub struct DemoGame {
 impl retro_blit::window::ContextHandler for DemoGame {
     fn get_window_title(&self) -> &'static str { "asteroids game" }
 
-    fn get_window_mode(&self) -> WindowMode { WindowMode::ModeX }
+    fn get_window_mode(&self) -> WindowMode { WindowMode::ModeXFrameless }
+
+    fn on_key_up(&mut self, ctx: &mut RetroBlitContext, key_code: KeyCode, _key_mods: KeyMods) {
+        match key_code {
+            KeyCode::M => {
+                self.mute_sounds = !self.mute_sounds;
+                update_playback_volume(ctx, self.mute_sounds, self.volume);
+            },
+            KeyCode::Minus => {
+                self.volume = (self.volume - 0.1).clamp(0.0, 1.0);
+                update_playback_volume(ctx, self.mute_sounds, self.volume);
+            },
+            KeyCode::Equal => {
+                self.volume = (self.volume + 0.1).clamp(0.0, 1.0);
+                update_playback_volume(ctx, self.mute_sounds, self.volume);
+            }
+            _ => ()
+        }
+
+        fn update_playback_volume(ctx: &mut RetroBlitContext, mute_sounds: bool, volume: f32) {
+            if let Some(driver) = ctx.borrow_sound_driver() {
+                if mute_sounds {
+                    driver.set_global_volume(0.0);
+                } else {
+                    driver.set_global_volume(volume);
+                }
+            }
+        }
+    }
 
     fn init(&mut self, ctx: &mut RetroBlitContext) {
         PathTessellator::new().tessellate_polyline_fill(
@@ -91,45 +118,26 @@ impl retro_blit::window::ContextHandler for DemoGame {
             ctx.set_palette(idx as u8, palette_color);
         }
 
-        if ctx.init_audio() {
-            self.music_handle = ctx.play_sound(self.sounds.background_music.clone());
-            self.has_sounds = true;
-        }
+        self.music_handle = ctx
+            .borrow_sound_driver()
+            .map(|driver| {
+                driver.play_sound(self.sounds.background_music.clone())
+            });
 
         self.start_new_game();
     }
 
-    fn on_key_up(&mut self, ctx: &mut RetroBlitContext, key_code: KeyCode, _key_mods: KeyMods) {
-        match key_code {
-            KeyCode::M => {
-                self.mute_sounds = !self.mute_sounds;
-                update_playback_volume(ctx, self.mute_sounds, self.volume);
-            },
-            KeyCode::Minus => {
-                self.volume = (self.volume - 0.1).clamp(0.0, 1.0);
-                update_playback_volume(ctx, self.mute_sounds, self.volume);
-            },
-            KeyCode::Equal => {
-                self.volume = (self.volume + 0.1).clamp(0.0, 1.0);
-                update_playback_volume(ctx, self.mute_sounds, self.volume);
-            }
-            _ => ()
-        }
-
-        fn update_playback_volume(ctx: &mut RetroBlitContext, mute_sounds: bool, volume: f32) {
-            if mute_sounds {
-                ctx.set_global_playback_volume(0.0);
-            } else {
-                ctx.set_global_playback_volume(volume);
-            }
-        }
-    }
-
     fn update(&mut self, ctx: &mut RetroBlitContext, dt: f32) {
         if let Some(music_handle) = self.music_handle {
-            if self.has_sounds && !ctx.playback_in_progress(music_handle) {
-                self.music_handle = ctx.play_sound(self.sounds.background_music.clone());
-            }
+            self.music_handle = ctx
+                .borrow_sound_driver()
+                .map(|driver| {
+                    if !driver.playback_in_progress(music_handle) {
+                        driver.play_sound(self.sounds.background_music.clone())
+                    } else {
+                        music_handle
+                    }
+                });
         }
 
         self.update_star_sky(ctx, dt);
@@ -149,6 +157,10 @@ impl retro_blit::window::ContextHandler for DemoGame {
 
         self.render(ctx);
     }
+}
+
+pub fn play_sound_and_forget(ctx: &mut RetroBlitContext, sound_handle: SoundHandle) {
+    ctx.borrow_sound_driver().map(|it| it.play_sound(sound_handle));
 }
 
 impl DemoGame {
@@ -187,7 +199,6 @@ impl DemoGame {
             font,
             flicker_dt_accumulated: 0.0,
             music_handle: None,
-            has_sounds: false,
             mute_sounds: false,
             volume: 1.0
         }

@@ -9,11 +9,7 @@ use retro_blit::{
     rendering::transform::Transform
 };
 use retro_blit::window::RetroBlitContext;
-use crate::{
-    components::*,
-    constants::*,
-    DemoGame
-};
+use crate::{components::*, constants::*, DemoGame, play_sound_and_forget};
 
 impl DemoGame {
     pub fn update_bullet_collisions(&mut self, ctx: &mut RetroBlitContext) {
@@ -70,7 +66,7 @@ impl DemoGame {
                 for asteroid_entity in hit_asteroids.drain(..) {
                     let position = *self.ecs_world.get::<Position>(asteroid_entity).unwrap();
                     let asteroid = *self.ecs_world.get::<Asteroid>(asteroid_entity).unwrap();
-                    ctx.play_sound(self.sounds.asteroid_explode.clone());
+                    play_sound_and_forget(ctx, self.sounds.asteroid_explode.clone());
                     self.blow_asteroid(asteroid_entity, position, asteroid);
                 }
                 for (bullet_entity, spatial_handle) in hit_bullets.drain(..) {
@@ -129,7 +125,7 @@ impl DemoGame {
                         }
                     }
                     if !hit_asteroids.is_empty() {
-                        ctx.play_sound(self.sounds.player_explode.clone());
+                        play_sound_and_forget(ctx, self.sounds.player_explode.clone());
                         self.kill_entity(player_entity, player_handle);
                         for asteroid_entity in hit_asteroids.drain(..) {
                             let position = *self.ecs_world.get::<Position>(asteroid_entity).unwrap();

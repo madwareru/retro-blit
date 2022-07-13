@@ -1,9 +1,5 @@
 use retro_blit::window::{KeyCode, RetroBlitContext};
-use crate::{
-    components::*,
-    constants::*,
-    DemoGame
-};
+use crate::{components::*, constants::*, DemoGame, play_sound_and_forget};
 
 impl DemoGame {
     pub fn update_player_controls(&mut self, ctx: &mut RetroBlitContext, dt: f32) {
@@ -58,7 +54,7 @@ impl DemoGame {
                 });
 
             if let Some((position, angle)) = position_and_angle {
-                ctx.play_sound(self.sounds.laser_shot.clone());
+                play_sound_and_forget(ctx, self.sounds.laser_shot.clone());
                 self.spawn_bullet(position, angle);
             }
         }
