@@ -491,7 +491,7 @@ impl<CtxHandler: ContextHandler> Stage<CtxHandler> {
                 }
                 (mask_mesh, screen_mesh)
             },
-            WindowMode::Mode13Frameless | WindowMode::ModeXFrameless => (
+            WindowMode::Mode13Frameless | WindowMode::ModeXFrameless | WindowMode::Mode160x120 => (
                 Mesh::make_empty(),
                 Mesh::make_3x4()
             ),
@@ -804,8 +804,8 @@ impl<CtxHandler: ContextHandler> EventHandler for Stage<CtxHandler> {
         let screen_size = ctx.screen_size();
         let aspect = screen_size.0 / screen_size.1;
 
-        let x = ((x / screen_size.0 - 0.5) * 2.0 * aspect).clamp(-1.0, 1.0);
-        let y = -((y / screen_size.1 - 0.5) * 2.0).clamp(-1.0, 1.0);
+        let x = (x / screen_size.0 - 0.5) * 2.0 * aspect;
+        let y = -((y / screen_size.1 - 0.5) * 2.0);
 
         self.check_for_hit_test(x, y);
     }
@@ -880,34 +880,45 @@ impl<CtxHandler: ContextHandler> EventHandler for Stage<CtxHandler> {
 
 impl<CtxHandler: ContextHandler> Stage<CtxHandler> {
     fn check_for_hit_test(&mut self, x: f32, y: f32) {
-        let pt = Vec4 {x, y, z: 0.0, w: 1.0 };
+        match self.handler.get_window_mode() {
+            WindowMode::ModeX | WindowMode::Mode13 => {
+                let pt = Vec4 {x: x.clamp(-1.0, 1.0), y: y.clamp(-1.0, 1.0), z: 0.0, w: 1.0 };
 
-        let mut offset = 0;
-        while offset < self.screen_mesh.indices.len() {
-            let vert0 = self.screen_mesh.vertices[self.screen_mesh.indices[offset] as usize];
-            let vert1 = self.screen_mesh.vertices[self.screen_mesh.indices[offset + 1] as usize];
-            let vert2 = self.screen_mesh.vertices[self.screen_mesh.indices[offset + 2] as usize];
+                let mut offset = 0;
+                while offset < self.screen_mesh.indices.len() {
+                    let vert0 = self.screen_mesh.vertices[self.screen_mesh.indices[offset] as usize];
+                    let vert1 = self.screen_mesh.vertices[self.screen_mesh.indices[offset + 1] as usize];
+                    let vert2 = self.screen_mesh.vertices[self.screen_mesh.indices[offset + 2] as usize];
 
-            let hit_test = Vec4::get_barycentric_2d(
-                pt,
-                [
-                    vert0.position,
-                    vert1.position,
-                    vert2.position
-                ]
-            );
+                    let hit_test = Vec4::get_barycentric_2d(
+                        pt,
+                        [
+                            vert0.position,
+                            vert1.position,
+                            vert2.position
+                        ]
+                    );
 
-            match hit_test {
-                None => {}
-                Some([bar_u, bar_v, bar_w]) => {
-                    let u = bar_u * vert0.uv.x + bar_v * vert1.uv.x + bar_w * vert2.uv.x;
-                    let v = 1.0 - (bar_u * vert0.uv.y + bar_v * vert1.uv.y + bar_w * vert2.uv.y);
-                    self.context_data.mouse_x = u * self.context_data.buffer_width as f32;
-                    self.context_data.mouse_y = v * self.context_data.buffer_height as f32;
-                    return;
+                    match hit_test {
+                        None => {}
+                        Some([bar_u, bar_v, bar_w]) => {
+                            let u = bar_u * vert0.uv.x + bar_v * vert1.uv.x + bar_w * vert2.uv.x;
+                            let v = 1.0 - (bar_u * vert0.uv.y + bar_v * vert1.uv.y + bar_w * vert2.uv.y);
+                            self.context_data.mouse_x = u * self.context_data.buffer_width as f32;
+                            self.context_data.mouse_y = v * self.context_data.buffer_height as f32;
+                            return;
+                        }
+                    }
+                    offset += 3;
                 }
+            },
+            _ => {
+                let aspect = self.context_data.buffer_width as f32 / self.context_data.buffer_height as f32;
+                let u = ((x / aspect).clamp(-1.0, 1.0) + 1.0) / 2.0;
+                let v = 1.0 - (y.clamp(-1.0, 1.0) + 1.0) / 2.0;
+                self.context_data.mouse_x = u * self.context_data.buffer_width as f32;
+                self.context_data.mouse_y = v * self.context_data.buffer_height as f32;
             }
-            offset += 3;
         }
     }
 }
@@ -1042,7 +1053,8 @@ pub enum WindowMode {
     ModeXFrameless,
     Mode64x64,
     Mode128x128,
-    Mode256x256
+    Mode256x256,
+    Mode160x120
 }
 impl WindowMode {
     fn get_render_texture_dimensions(&self) -> (usize, usize) {
@@ -1054,6 +1066,7 @@ impl WindowMode {
             WindowMode::Mode64x64 => (2048, 2048),
             WindowMode::Mode128x128 => (2048, 2048),
             WindowMode::Mode256x256 => (2048, 2048),
+            WindowMode::Mode160x120 => (1600, 1200),
         }
     }
 
@@ -1066,6 +1079,7 @@ impl WindowMode {
             WindowMode::Mode64x64 => (64, 64),
             WindowMode::Mode128x128 => (128, 128),
             WindowMode::Mode256x256 => (256, 256),
+            WindowMode::Mode160x120 => (160, 120),
         }
     }
 }
@@ -1074,7 +1088,7 @@ pub fn start<CtxHandler: 'static + ContextHandler>(handler: CtxHandler) {
     let conf = conf::Conf {
         window_title: handler.get_window_title().to_string(),
         window_width: 1024,
-        window_height: 1024,
+        window_height: 768,
         high_dpi: true,
         fullscreen: false,
         sample_count: 6,

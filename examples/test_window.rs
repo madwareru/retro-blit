@@ -1,8 +1,15 @@
-use retro_blit::rendering::blittable::{BlitBuilder};
+use retro_blit::rendering::blittable::{BlitBuilder, BufferProviderMut, SizedSurface};
 use retro_blit::rendering::BlittableSurface;
-use retro_blit::window::{RetroBlitContext, ContextHandler, WindowMode};
+use retro_blit::window::{RetroBlitContext, ContextHandler, WindowMode, ScrollKind, ScrollDirection};
 
-const PICTURE_BYTES: &[u8] = include_bytes!("spritesheet.im256");
+const PICTURE_BYTES: &[u8] = include_bytes!("dungeon_crawler.im256");
+
+const BAYER_LOOKUP: [u8; 16] = [
+    00, 08, 02, 10,
+    12, 04, 14, 06,
+    03, 11, 01, 09,
+    15, 07, 13, 05
+];
 
 #[derive(Copy, Clone)]
 pub enum Tile {
@@ -56,7 +63,7 @@ impl ContextHandler for MyGame {
     }
 
     fn get_window_mode(&self) -> WindowMode {
-        WindowMode::Mode64x64
+        WindowMode::ModeXFrameless
     }
 
     fn on_mouse_down(&mut self, _ctx: &mut RetroBlitContext, button_number: u8) {
@@ -79,38 +86,22 @@ impl ContextHandler for MyGame {
     }
 
     fn update(&mut self, ctx: &mut RetroBlitContext, _dt: f32) {
-        ctx.clear(1);
+        self.offset += 1;
+
+        if self.offset % 12 == 0 {
+            ctx.scroll_palette(
+                ScrollKind::Range { start_idx: 26, len: 6},
+                ScrollDirection::Backward
+            );
+        }
+
+        ctx.clear(2);
 
         let sprite_sheet_with_color_key = self
             .sprite_sheet
             .with_color_key(0);
 
-        for j in 0..5 {
-            let y_coord = (j as i16) * 20;
-            for i in 0..5 {
-                let x_coord = (i as i16) * 24;
-                let (tx, ty) = self.level[j][i].to_tile_coords();
-                BlitBuilder::create(ctx, &sprite_sheet_with_color_key)
-                    .with_source_subrect(tx, ty, 24, 32)
-                    .with_dest_pos(x_coord, y_coord)
-                    .blit();
-            }
-        }
-
-        let (mouse_x, mouse_y) = ctx.get_mouse_pos();
-
-        if self.button_pressed {
-            BlitBuilder::create(ctx, &(self.sprite_sheet.with_color_key_blink(0, 40)))
-                .with_source_subrect(0, 0, 24, 20)
-                .with_dest_pos(mouse_x as _, mouse_y as _)
-                .blit();
-        } else {
-            BlitBuilder::create(ctx, &sprite_sheet_with_color_key)
-                .with_source_subrect(0, 0, 24, 20)
-                .with_dest_pos(mouse_x as _, mouse_y as _)
-                .blit();
-        }
-        self.offset += 1;
+        BlitBuilder::create(ctx, &sprite_sheet_with_color_key).blit();
     }
 }
 
