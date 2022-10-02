@@ -1,10 +1,8 @@
 use jfa_cpu::MatrixJfa;
-use noise::{Fbm, NoiseFn};
 use retro_blit::rendering::blittable::{BufferProvider, BufferProviderMut};
 use retro_blit::rendering::BlittableSurface;
 use retro_blit::utility::StopWatch;
 use retro_blit::window::{RetroBlitContext, ContextHandler, WindowMode};
-use noise::permutationtable::PermutationTable;
 
 const WANG_MASK_BYTES: &[u8] = include_bytes!("jfa_test_image.im256");
 const VORONOI_DOTS_BYTES: &[u8] = include_bytes!("voronoi_dots.im256");

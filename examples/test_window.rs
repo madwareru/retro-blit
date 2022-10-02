@@ -2,7 +2,7 @@ use retro_blit::rendering::blittable::{BlitBuilder, BufferProviderMut, SizedSurf
 use retro_blit::rendering::BlittableSurface;
 use retro_blit::window::{RetroBlitContext, ContextHandler, WindowMode, ScrollKind, ScrollDirection};
 
-const PICTURE_BYTES: &[u8] = include_bytes!("dungeon_crawler.im256");
+const PICTURE_BYTES: &[u8] = include_bytes!("../dungeon-crawler-example/src/dungeon_crawler.im256");
 
 const BAYER_LOOKUP: [u8; 16] = [
     00, 08, 02, 10,

@@ -18,4 +18,3 @@ maplit = "1.0.2"
 bytemuck = "1.9.1"
 bumpalo = { version = "3.10.0", features = ["collections"]}
 rodio = "0.15.0"
-noise = { git = "https://github.com/Razaekel/noise-rs", version = "0.7.0"}
