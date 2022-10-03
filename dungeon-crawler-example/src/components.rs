@@ -4,6 +4,15 @@ use std::collections::HashMap;
 pub struct Player;
 
 #[derive(Copy, Clone)]
+pub struct HP(pub i32);
+
+#[derive(Copy, Clone)]
+pub struct MP(pub i32);
+
+#[derive(Copy, Clone)]
+pub struct Angle(pub f32);
+
+#[derive(Copy, Clone)]
 pub enum Monster {
     Toad,
     Kobold,
@@ -39,18 +48,19 @@ pub struct WangHeightMapEntry {
     pub south_west: super::map_data::HeightMapEntry
 }
 
+#[derive(Copy, Clone)]
 pub struct WangTerrainEntry {
     pub terrain_id: usize,
     pub top: WangHeightMapEntry,
     pub bottom: WangHeightMapEntry,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, PartialEq)]
 pub struct Position {
-    pub x: i32, pub y: i32,
+    pub x: f32, pub y: f32,
 }
 
 pub struct WangTerrain {
     pub tiles: Vec<WangTerrainEntry>,
-    pub props: HashMap<Position, TerrainProp>
+    pub props: HashMap<[u8; 2], TerrainProp>
 }

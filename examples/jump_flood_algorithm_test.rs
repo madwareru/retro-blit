@@ -87,10 +87,12 @@ impl ContextHandler for App {
                         let y = idx / 64;
                         let dx = x as f32 - nearest_coord.0 as f32;
                         let dy = y as f32 - nearest_coord.1 as f32;
-                        let distance_mask = 1.0 - ((dx * dx + dy * dy).sqrt() * 20.0).clamp(0.0, 255.0) / 255.0;
+                        let distance = (dx * dx + dy * dy).sqrt();
+                        let distance = smooth_step(0.0, 12.0, distance);
+                        let distance_mask = 1.0 - distance;
                         let noise = voronoi[idx];
                         let terrain_height = 0.3 + 0.1 * noise.powf(0.5) as f32;
-                        let final_height = (terrain_height - distance_mask).clamp(0.0, 1.0);
+                        let final_height = (terrain_height + distance_mask).clamp(0.0, 1.0);
 
                         unsafe {
                             let idx = start_i + x + (start_j + y) * 256;
@@ -100,6 +102,17 @@ impl ContextHandler for App {
                 }
             }
         }
+    }
+}
+
+fn smooth_step(edge_0: f32, edge_1: f32, x: f32) -> f32 {
+    match () {
+        _ if x < edge_0 => 0.0,
+        _ if x >= edge_1 => 1.0,
+        _ => {
+            let x = (x - edge_0) / (edge_1 - edge_0);
+            x * x * (3.0 - 2.0 * x)
+        }.clamp(0.0, 1.0)
     }
 }
 

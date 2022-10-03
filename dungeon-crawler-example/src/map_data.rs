@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use rand::Rng;
 use retro_blit::rendering::blittable::BufferProvider;
-use crate::components::{Player, Position, WangHeightMapEntry, WangTerrain, WangTerrainEntry};
+use crate::components::{Angle, HP, MP, Player, Position, WangHeightMapEntry, WangTerrain, WangTerrainEntry};
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 pub enum HeightMapEntry { Water, Floor, Wall }
 
 pub struct MapData {
@@ -149,30 +149,30 @@ impl MapData {
             }
         }
         for (&pos, &prop) in self.terrain_props.iter() {
-            wang_terrain.props.insert(
-                Position {
-                    x: pos[0] as i32 * 32,
-                    y: pos[1] as i32 * 32,
-                },
-                prop
-            );
+            wang_terrain.props.insert(pos, prop);
         }
         world.spawn((wang_terrain,));
 
         for (&pos, &potion) in self.potions.iter() {
-            let position = Position { x: pos[0] as i32 * 32, y: pos[1] as i32 * 32 };
+            let position = Position { x: pos[0] as f32 * 64.0, y: pos[1] as f32 * 64.0};
             world.spawn((position, potion));
         }
 
         for (&pos, &monster) in self.monsters.iter() {
-            let position = Position { x: pos[0] as i32 * 32, y: pos[1] as i32 * 32 };
+            let position = Position { x: pos[0] as f32 * 64.0, y: pos[1] as f32 * 64.0 };
             world.spawn((position, monster));
         }
 
         let player_position = Position {
-            x: self.player_entry_point[0] as i32 * 32,
-            y: self.player_entry_point[1] as i32 * 32
+            x: self.player_entry_point[0] as f32 * 64.0 + 32.0,
+            y: self.player_entry_point[1] as f32 * 64.0 + 32.0
         };
-        world.spawn((Player, player_position));
+        world.spawn((
+            Player,
+            player_position,
+            HP(30),
+            MP(45),
+            Angle(0.0)
+        ));
     }
 }
