@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use retro_blit::rendering::blittable::BufferProvider;
 use crate::components::{Angle, HP, MP, Player, Position, WangHeightMapEntry, WangTerrain, WangTerrainEntry};
 
@@ -7,10 +7,10 @@ pub enum HeightMapEntry { Water, Floor, Wall }
 
 pub struct MapData {
     height_map: Vec<HeightMapEntry>,
-    monsters: HashMap<[u8; 2], super::components::Monster>,
-    potions: HashMap<[u8; 2], super::components::Potion>,
-    terrain_props: HashMap<[u8; 2], super::components::TerrainProp>,
-    player_entry_point: [u8; 2]
+    monsters: HashMap<[u16; 2], super::components::Monster>,
+    potions: HashMap<[u16; 2], super::components::Potion>,
+    terrain_props: HashMap<[u16; 2], super::components::TerrainProp>,
+    player_entry_point: [u16; 2]
 }
 
 impl MapData {
@@ -47,7 +47,7 @@ impl MapData {
         let mut potions = HashMap::new();
         let mut monsters = HashMap::new();
         let mut height_map = Vec::with_capacity(Self::WIDTH * Self::HEIGHT);
-        let mut player_entry_point = [(Self::WIDTH / 2) as u8, (Self::HEIGHT / 2) as u8];
+        let mut player_entry_point = [(Self::WIDTH / 2) as u16, (Self::HEIGHT / 2) as u16];
 
         for idx in 0..buffer.len() {
             let x = idx % Self::WIDTH;
@@ -57,43 +57,43 @@ impl MapData {
                 Self::WALL_ID => HeightMapEntry::Wall,
                 Self::FLOOR_ID => HeightMapEntry::Floor,
                 Self::STALAGMITE_ID => {
-                    terrain_props.insert([x as u8, y as u8], super::components::TerrainProp::Stalagmite);
+                    terrain_props.insert([x as u16, y as u16], super::components::TerrainProp::Stalagmite);
                     HeightMapEntry::Floor
                 },
                 Self::WATER_STALAGMITE_ID => {
-                    terrain_props.insert([x as u8, y as u8], super::components::TerrainProp::Stalagmite);
+                    terrain_props.insert([x as u16, y as u16], super::components::TerrainProp::Stalagmite);
                     HeightMapEntry::Water
                 },
                 Self::STALACTITE_ID => {
-                    terrain_props.insert([x as u8, y as u8], super::components::TerrainProp::Stalactite);
+                    terrain_props.insert([x as u16, y as u16], super::components::TerrainProp::Stalactite);
                     HeightMapEntry::Floor
                 },
                 Self::MANA_POTION_ID => {
-                    potions.insert([x as u8, y as u8], super::components::Potion::Mana);
+                    potions.insert([x as u16, y as u16], super::components::Potion::Mana);
                     HeightMapEntry::Floor
                 },
                 Self::HEALTH_POTION_ID => {
-                    potions.insert([x as u8, y as u8], super::components::Potion::Health);
+                    potions.insert([x as u16, y as u16], super::components::Potion::Health);
                     HeightMapEntry::Floor
                 },
                 Self::PLAYER_ENTRY_POINT_ID => {
-                    player_entry_point = [x as u8, y as u8];
+                    player_entry_point = [x as u16, y as u16];
                     HeightMapEntry::Floor
                 },
                 Self::KOBOLD_MONSTER_ID => {
-                    monsters.insert([x as u8, y as u8], super::components::Monster::Kobold);
+                    monsters.insert([x as u16, y as u16], super::components::Monster::Kobold);
                     HeightMapEntry::Floor
                 },
                 Self::RAT_MONSTER_ID => {
-                    monsters.insert([x as u8, y as u8], super::components::Monster::Rat);
+                    monsters.insert([x as u16, y as u16], super::components::Monster::Rat);
                     HeightMapEntry::Floor
                 },
                 Self::TOAD_MONSTER_ID => {
-                    monsters.insert([x as u8, y as u8], super::components::Monster::Toad);
+                    monsters.insert([x as u16, y as u16], super::components::Monster::Toad);
                     HeightMapEntry::Floor
                 },
                 Self::SKELETON_MONSTER_ID => {
-                    monsters.insert([x as u8, y as u8], super::components::Monster::Skeleton);
+                    monsters.insert([x as u16, y as u16], super::components::Monster::Skeleton);
                     HeightMapEntry::Floor
                 },
                 _ => panic!("found unknown id! {}", buffer[idx])
@@ -107,7 +107,8 @@ impl MapData {
     pub fn populate_world(&self, world: &mut hecs::World) {
         let mut wang_terrain = WangTerrain {
             tiles: Vec::with_capacity((MapData::WIDTH-1) * (MapData::HEIGHT-1)),
-            props: HashMap::new()
+            props: HashMap::new(),
+            seen_tiles: HashSet::new()
         };
         for j in 0..MapData::HEIGHT-1 {
             for i in 0..MapData::WIDTH-1 {

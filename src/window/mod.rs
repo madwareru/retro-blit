@@ -289,7 +289,8 @@ pub struct RetroBlitContext {
     mouse_x: f32,
     mouse_y: f32,
     keys_pressed: HashSet<KeyCode>,
-    key_mods_pressed: KeyMods
+    key_mods_pressed: KeyMods,
+    quit_fired: bool
 }
 
 pub enum ScrollKind {
@@ -328,6 +329,10 @@ impl RetroBlitContext {
                 println!("Failed to init audio: {}", &error);
             }
         }
+    }
+
+    pub fn quit(&mut self) {
+        self.quit_fired = true;
     }
 
     pub fn borrow_sound_driver(&mut self) -> Option<&mut SoundDriver> {
@@ -615,7 +620,8 @@ impl<CtxHandler: ContextHandler> Stage<CtxHandler> {
                 control: false,
                 option: false,
                 command: false
-            }
+            },
+            quit_fired: false
         };
         context_data.init_audio();
 
@@ -755,6 +761,9 @@ impl<CtxHandler: ContextHandler> Stage<CtxHandler> {
 
 impl<CtxHandler: ContextHandler> EventHandler for Stage<CtxHandler> {
     fn update(&mut self, ctx: &mut Context) {
+        if self.context_data.quit_fired {
+            ctx.quit();
+        }
         let dt = self.last_instant.elapsed().as_micros() as f32 / 1000000.0;
         self.last_instant = Instant::now();
         if let Some(driver) = &mut self.context_data.sound_driver {

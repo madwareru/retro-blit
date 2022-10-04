@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Copy, Clone)]
 pub struct Player;
@@ -62,5 +62,6 @@ pub struct Position {
 
 pub struct WangTerrain {
     pub tiles: Vec<WangTerrainEntry>,
-    pub props: HashMap<[u8; 2], TerrainProp>
+    pub props: HashMap<[u16; 2], TerrainProp>,
+    pub seen_tiles: HashSet<[u16; 2]>
 }
