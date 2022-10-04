@@ -19,7 +19,7 @@ const GRAPHICS_BYTES: &[u8] = include_bytes!("dungeon_crawler.im256");
 const DARKEST_BLUE_IDX: usize = 0x02;
 
 const PIXELS_PER_METER: f32 = 64.0;
-const VIEW_RANGE: f32 = 7.0;
+const VIEW_RANGE: f32 = 14.0;
 
 const NEAR: f32 = 0.05 * PIXELS_PER_METER;
 const FAR: f32 = PIXELS_PER_METER * VIEW_RANGE;
@@ -28,6 +28,7 @@ const FOV_SLOPE: f32 = 0.7;
 mod terrain_tiles_data;
 mod map_data;
 mod components;
+mod utils;
 
 pub struct App {
     time: f32,
@@ -35,7 +36,7 @@ pub struct App {
     palette: Vec<[u8; 3]>,
     graphics: BlittableSurface,
     depth_buffer: Vec<f32>,
-    world: World
+    world: World,
 }
 
 impl App {
@@ -45,9 +46,9 @@ impl App {
         let mut world = hecs::World::new();
         let map_data = map_data::MapData::load(MAP_BYTES);
         let (palette, graphics) = retro_blit::format_loaders::im_256::Image
-            ::load_from(GRAPHICS_BYTES)
+        ::load_from(GRAPHICS_BYTES)
             .unwrap();
-        let mut depth_buffer = Vec::with_capacity(160*120);
+        let mut depth_buffer = Vec::with_capacity(160 * 120);
         for j in 0..120 {
             let depth = 1.0 - ((48.0 - j as f32).abs() / 48.0).clamp(0.0, 1.0);
             for _ in 0..160 {
@@ -61,7 +62,7 @@ impl App {
             palette,
             graphics,
             depth_buffer,
-            world
+            world,
         }
     }
 
@@ -143,7 +144,7 @@ impl App {
 
     fn render(&mut self, ctx: &mut RetroBlitContext) {
         let _ = StopWatch::named("render");
-        ctx.clear(18);
+        ctx.clear(66);
 
         self.clear_depth_buffer();
 
@@ -163,7 +164,7 @@ impl App {
     fn render_terrain(&mut self, ctx: &mut RetroBlitContext) {
         let mut trapezoid_coords;
         if let Some((_, data)) = self.world.query::<(&Player, &Position, &Angle)>().iter().next() {
-            let (_, &Position{x, y}, &Angle(angle)) = data;
+            let (_, &Position { x, y }, &Angle(angle)) = data;
 
             let angle = angle.to_radians();
 
@@ -181,14 +182,14 @@ impl App {
             return;
         }
 
-        let mut t_lookup = [1.0; 256];
+        let mut t_lookup = [1.0; 512];
         let mut t = 1.0;
-        for i in (0..256).rev() {
+        for i in (0..512).rev() {
             t_lookup[i] = t * t;
-            t -= 1.0 / 256.0;
+            t -= 1.0 / 512.0;
         }
 
-        if let Some((_, (wang_terrain,))) = self.world.query::<(&WangTerrain,)>().iter().next() {
+        if let Some((_, (wang_terrain, ))) = self.world.query::<(&WangTerrain, )>().iter().next() {
             for i in 0..160 {
                 let t = i as f32 / 159.0;
                 let uv_up = (
@@ -222,7 +223,7 @@ impl App {
                     {
                         None
                     } else {
-                        let idx = (MapData::WIDTH-1) * cell_coord.1 as usize + cell_coord.0 as usize;
+                        let idx = (MapData::WIDTH - 1) * cell_coord.1 as usize + cell_coord.0 as usize;
                         Some(wang_terrain.tiles[idx])
                     }.unwrap_or(WangTerrainEntry {
                         terrain_id: 0,
@@ -230,14 +231,14 @@ impl App {
                             north_east: HeightMapEntry::Wall,
                             north_west: HeightMapEntry::Wall,
                             south_east: HeightMapEntry::Wall,
-                            south_west: HeightMapEntry::Wall
+                            south_west: HeightMapEntry::Wall,
                         },
                         bottom: WangHeightMapEntry {
                             north_east: HeightMapEntry::Wall,
                             north_west: HeightMapEntry::Wall,
                             south_east: HeightMapEntry::Wall,
-                            south_west: HeightMapEntry::Wall
-                        }
+                            south_west: HeightMapEntry::Wall,
+                        },
                     });
 
                     let water_pix = self.graphics.get_buffer()[
@@ -245,10 +246,15 @@ impl App {
                             self.graphics.get_width() * (48 + (cell_remainder.1 * 24.0) as usize)
                         ];
 
+                    let floor_pix = self.graphics.get_buffer()[
+                        (cell_remainder.0 * 24.0) as usize + 24 +
+                            self.graphics.get_width() * (48 + (cell_remainder.1 * 24.0) as usize)
+                        ];
+
                     let terrain_h = self.terrain_tiles.sample_tile(
                         TileInfo::Terrain(wang_terrain_entry.terrain_id),
                         cell_remainder.0,
-                        cell_remainder.1
+                        cell_remainder.1,
                     );
 
                     let mut terrain_bottom = terrain_h;
@@ -268,10 +274,10 @@ impl App {
                         }
                         terrain_bottom += (1.0 - terrain_bottom) *
                             self.terrain_tiles.sample_tile(
-                            TileInfo::Wang(wang_id),
-                            cell_remainder.0,
-                            cell_remainder.1
-                        );
+                                TileInfo::Wang(wang_id),
+                                cell_remainder.0,
+                                cell_remainder.1,
+                            );
 
                         wang_id = 0;
                         if wang_terrain_entry.bottom.north_east == HeightMapEntry::Water {
@@ -288,17 +294,17 @@ impl App {
                         }
                         terrain_bottom += -terrain_bottom *
                             self.terrain_tiles.sample_tile(
-                            TileInfo::Wang(wang_id),
-                            cell_remainder.0,
-                            cell_remainder.1
-                        );
+                                TileInfo::Wang(wang_id),
+                                cell_remainder.0,
+                                cell_remainder.1,
+                            );
                     }
                     if in_range {
                         if let Some(TerrainProp::Stalagmite) = wang_terrain.props.get(&[cell_coord.0 as u8, cell_coord.1 as u8]) {
                             terrain_bottom += self.terrain_tiles.sample_tile(
                                 TileInfo::Stalagmite,
                                 cell_remainder.0,
-                                cell_remainder.1
+                                cell_remainder.1,
                             ) * 0.4;
                         }
                     }
@@ -322,7 +328,7 @@ impl App {
                             self.terrain_tiles.sample_tile(
                                 TileInfo::Wang(wang_id),
                                 cell_remainder.0,
-                                cell_remainder.1
+                                cell_remainder.1,
                             );
 
                         wang_id = 0;
@@ -342,7 +348,7 @@ impl App {
                             self.terrain_tiles.sample_tile(
                                 TileInfo::Wang(wang_id),
                                 cell_remainder.0,
-                                cell_remainder.1
+                                cell_remainder.1,
                             );
                     }
                     if in_range {
@@ -350,7 +356,7 @@ impl App {
                             terrain_top += self.terrain_tiles.sample_tile(
                                 TileInfo::Stalactite,
                                 cell_remainder.0,
-                                cell_remainder.1
+                                cell_remainder.1,
                             ) * 0.4;
                         }
                     }
@@ -365,8 +371,10 @@ impl App {
                             if h > max_h {
                                 for _ in max_h..h {
                                     let idx = i + 160 * bottom_pix;
-                                    self.depth_buffer[idx] = t;
-                                    ctx.get_buffer_mut()[idx] = 17;
+                                    if self.depth_buffer[idx] > t {
+                                        self.depth_buffer[idx] = t;
+                                        ctx.get_buffer_mut()[idx] = floor_pix;
+                                    }
                                     if bottom_pix > 0 { bottom_pix -= 1; }
                                 }
                                 max_h = h;
@@ -380,8 +388,10 @@ impl App {
                             if h > max_h {
                                 for _ in max_h..h {
                                     let idx = i + 160 * bottom_pix;
-                                    self.depth_buffer[idx] = t;
-                                    ctx.get_buffer_mut()[idx] = water_pix;
+                                    if self.depth_buffer[idx] > t {
+                                        self.depth_buffer[idx] = t;
+                                        ctx.get_buffer_mut()[idx] = water_pix;
+                                    }
                                     if bottom_pix > 0 { bottom_pix -= 1; }
                                 }
                                 max_h = h;
@@ -400,7 +410,7 @@ impl App {
                                 let idx = i + 160 * bottom_pix_top;
                                 if self.depth_buffer[idx] > t {
                                     self.depth_buffer[idx] = t;
-                                    ctx.get_buffer_mut()[idx] = 17;
+                                    ctx.get_buffer_mut()[idx] = floor_pix;
                                 }
                                 bottom_pix_top += 1;
                             }
@@ -446,7 +456,7 @@ impl ContextHandler for App {
                                 ((darkest_blue[2] as u16 + darken[2] as u16) / 2) as u8
                             ]
                         }
-                    }
+                    },
                 );
                 if offset < 255 { offset += 1; }
             }
@@ -458,30 +468,29 @@ impl ContextHandler for App {
 
         while self.time > 0.2 {
             self.time -= 0.2;
-            ctx.scroll_palette(ScrollKind::Range { start_idx: 26, len: 6}, ScrollDirection::Forward);
-            ctx.scroll_palette(ScrollKind::Range { start_idx: 26 + 64, len: 6}, ScrollDirection::Forward);
-            ctx.scroll_palette(ScrollKind::Range { start_idx: 26 + 128, len: 6}, ScrollDirection::Forward);
-            ctx.scroll_palette(ScrollKind::Range { start_idx: 26 + 192, len: 6}, ScrollDirection::Forward);
-
+            ctx.scroll_palette(ScrollKind::Range { start_idx: 26, len: 6 }, ScrollDirection::Forward);
+            ctx.scroll_palette(ScrollKind::Range { start_idx: 26 + 64, len: 6 }, ScrollDirection::Forward);
+            ctx.scroll_palette(ScrollKind::Range { start_idx: 26 + 128, len: 6 }, ScrollDirection::Forward);
+            ctx.scroll_palette(ScrollKind::Range { start_idx: 26 + 192, len: 6 }, ScrollDirection::Forward);
         }
 
         let turn_speed = match (ctx.is_key_pressed(KeyCode::Left), ctx.is_key_pressed(KeyCode::Right)) {
             (true, false) => {
                 60.0
-            },
+            }
             (false, true) => {
                 -60.0
-            },
+            }
             _ => 0.0
         };
 
         let movement_speed = match (ctx.is_key_pressed(KeyCode::Down), ctx.is_key_pressed(KeyCode::Up)) {
             (true, false) => {
                 -100.0
-            },
+            }
             (false, true) => {
                 100.0
-            },
+            }
             _ => 0.0
         };
 

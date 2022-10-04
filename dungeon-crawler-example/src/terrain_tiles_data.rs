@@ -56,7 +56,7 @@ impl TerrainTiles {
                             let dx = x as f32 - nearest_coord.0 as f32;
                             let dy = y as f32 - nearest_coord.1 as f32;
                             let distance = (dx * dx + dy * dy).sqrt();
-                            let distance = smooth_step(0.0, 12.0, distance);
+                            let distance = super::utils::smooth_step(0.0, 12.0, distance);
                             1.0 - distance
                         })
                         .collect::<Tile>()
@@ -166,16 +166,5 @@ impl TerrainTiles {
             super::components::TileInfo::Stalagmite => self.stalagmite_tile[idx],
             super::components::TileInfo::Stalactite => self.stalactite_tile[idx],
         }
-    }
-}
-
-fn smooth_step(edge_0: f32, edge_1: f32, x: f32) -> f32 {
-    match () {
-        _ if x < edge_0 => 0.0,
-        _ if x >= edge_1 => 1.0,
-        _ => {
-            let x = (x - edge_0) / (edge_1 - edge_0);
-            x * x * (3.0 - 2.0 * x)
-        }.clamp(0.0, 1.0)
     }
 }

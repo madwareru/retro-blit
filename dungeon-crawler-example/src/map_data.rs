@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use rand::Rng;
 use retro_blit::rendering::blittable::BufferProvider;
 use crate::components::{Angle, HP, MP, Player, Position, WangHeightMapEntry, WangTerrain, WangTerrainEntry};
 
@@ -106,8 +105,6 @@ impl MapData {
     }
 
     pub fn populate_world(&self, world: &mut hecs::World) {
-        let mut rng = rand::thread_rng();
-
         let mut wang_terrain = WangTerrain {
             tiles: Vec::with_capacity((MapData::WIDTH-1) * (MapData::HEIGHT-1)),
             props: HashMap::new()
@@ -144,7 +141,7 @@ impl MapData {
                         _ => bottom.south_west
                     },
                 };
-                let terrain_id = rng.gen_range(0..4);
+                let terrain_id = 0;
                 wang_terrain.tiles.push(WangTerrainEntry { terrain_id, bottom, top });
             }
         }
@@ -170,8 +167,8 @@ impl MapData {
         world.spawn((
             Player,
             player_position,
-            HP(30),
-            MP(45),
+            HP(100),
+            MP(100),
             Angle(0.0)
         ));
     }
