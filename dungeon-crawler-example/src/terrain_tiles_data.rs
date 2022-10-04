@@ -56,7 +56,7 @@ impl TerrainTiles {
                             let dx = x as f32 - nearest_coord.0 as f32;
                             let dy = y as f32 - nearest_coord.1 as f32;
                             let distance = (dx * dx + dy * dy).sqrt();
-                            let distance = super::utils::smooth_step(0.0, 12.0, distance);
+                            let distance = super::utils::smooth_step(0.0, 18.0, distance);
                             1.0 - distance
                         })
                         .collect::<Tile>()

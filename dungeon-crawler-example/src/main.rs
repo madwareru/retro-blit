@@ -234,12 +234,19 @@ impl App {
                             uv_bottom.0 * (1.0 - t) + uv_up.0 * t,
                             uv_bottom.1 * (1.0 - t) + uv_up.1 * t,
                         );
-                        let cell_coord = ((point.0 / 64.0), (point.1 / 64.0));
+                        let cell_coord = (point.0 / 64.0, point.1 / 64.0);
                         let cell_remainder = (cell_coord.0.fract(), cell_coord.1.fract());
                         let cell_coord = (cell_coord.0 as i32, cell_coord.1 as i32);
 
+                        let dual_cell_coord = ((point.0 + 32.0) / 64.0, (point.1 + 32.0) / 64.0);
+                        let dual_cell_remainder = (dual_cell_coord.0.fract(), dual_cell_coord.1.fract());
+                        let dual_cell_coord = (dual_cell_coord.0 as i32, dual_cell_coord.1 as i32);
+
                         let in_range = (0..(MapData::WIDTH as i32 - 1)).contains(&cell_coord.0) &&
                             (0..(MapData::HEIGHT as i32 - 1)).contains(&cell_coord.1);
+
+                        let dual_in_range = (0..(MapData::WIDTH as i32)).contains(&dual_cell_coord.0) &&
+                            (0..(MapData::HEIGHT as i32)).contains(&dual_cell_coord.1);
 
                         let wang_terrain_entry = if !in_range
                         {
@@ -326,13 +333,16 @@ impl App {
                                     cell_remainder.1,
                                 );
                         }
-                        if in_range {
-                            if let Some(TerrainProp::Stalagmite) = wang_terrain.props.get(&[cell_coord.0 as u16, cell_coord.1 as u16]) {
-                                terrain_bottom += self.terrain_tiles.sample_tile(
+                        if dual_in_range {
+                            if let Some(TerrainProp::Stalagmite) = wang_terrain.props.get(&[dual_cell_coord.0 as u16, dual_cell_coord.1 as u16]) {
+                                terrain_bottom = utils::lerp(
+                                    terrain_bottom,
+                                    if terrain_bottom < 0.3 { 0.4} else {0.75},
+                                    self.terrain_tiles.sample_tile(
                                     TileInfo::Stalagmite,
-                                    cell_remainder.0,
-                                    cell_remainder.1,
-                                ) * 0.4;
+                                    dual_cell_remainder.0,
+                                    dual_cell_remainder.1,
+                                ));
                             }
                         }
 
@@ -378,13 +388,13 @@ impl App {
                                     cell_remainder.1,
                                 );
                         }
-                        if in_range {
-                            if let Some(TerrainProp::Stalactite) = wang_terrain.props.get(&[cell_coord.0 as u16, cell_coord.1 as u16]) {
-                                terrain_top += self.terrain_tiles.sample_tile(
+                        if dual_in_range {
+                            if let Some(TerrainProp::Stalactite) = wang_terrain.props.get(&[dual_cell_coord.0 as u16, dual_cell_coord.1 as u16]) {
+                                terrain_top = utils::lerp(terrain_top, 0.55, self.terrain_tiles.sample_tile(
                                     TileInfo::Stalactite,
-                                    cell_remainder.0,
-                                    cell_remainder.1,
-                                ) * 0.4;
+                                    dual_cell_remainder.0,
+                                    dual_cell_remainder.1,
+                                ));
                             }
                         }
 

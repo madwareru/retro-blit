@@ -8,3 +8,14 @@ pub fn smooth_step(edge_0: f32, edge_1: f32, x: f32) -> f32 {
         }.clamp(0.0, 1.0)
     }
 }
+
+#[inline(always)]
+pub fn lerp(a: f32, b: f32, t: f32) -> f32 {
+    a * (1.0 - t) + b * t
+}
+
+#[inline(always)]
+pub fn slerp(a: f32, b: f32, t: f32) -> f32 {
+    let t = t * t * (3.0 - 2.0 * t);
+    a * (1.0 - t) + b * t
+}
