@@ -5,7 +5,7 @@ use retro_blit::rendering::bresenham::{BresenhamCircleDrawer, LineRasterizer};
 use retro_blit::rendering::fonts::font_align::{HorizontalAlignment, VerticalAlignment};
 use retro_blit::rendering::fonts::tri_spaced::{Font, TextDrawer};
 use retro_blit::window::{ContextHandler, KeyCode, KeyMod, KeyMods, RetroBlitContext, ScrollDirection, ScrollKind, WindowMode};
-use crate::components::{Angle, HP, MP, Player, Position, TerrainProp, TileInfo, WangHeightMapEntry, WangTerrain, WangTerrainEntry};
+use crate::components::{Angle, HP, Monster, MP, Player, Position, Potion, TerrainProp, TileInfo, WangHeightMapEntry, WangTerrain, WangTerrainEntry};
 use crate::map_data::{HeightMapEntry, MapData};
 use crate::terrain_tiles_data::TerrainTiles;
 
@@ -26,6 +26,7 @@ const VIEW_RANGE: f32 = 14.0;
 const NEAR: f32 = 0.05 * PIXELS_PER_METER;
 const FAR: f32 = PIXELS_PER_METER * VIEW_RANGE;
 const FOV_SLOPE: f32 = 0.7;
+const UNIT_H: f32 = -64.0 + 128.0 * 0.1;
 
 mod terrain_tiles_data;
 mod map_data;
@@ -173,6 +174,8 @@ impl App {
 
         self.render_terrain(ctx);
 
+        self.render_objects(ctx);
+
         self.fade(ctx);
 
         self.draw_overlays(ctx);
@@ -187,22 +190,10 @@ impl App {
     }
 
     fn render_terrain(&mut self, ctx: &mut RetroBlitContext) {
-        let mut trapezoid_coords;
+        let trapezoid_coords;
         if let Some((_, data)) = self.world.query::<(&Player, &Position, &Angle)>().iter().next() {
             let (_, &Position { x, y }, &Angle(angle)) = data;
-
-            let angle = angle.to_radians();
-
-            trapezoid_coords = [
-                rotate((FOV_SLOPE * NEAR, NEAR), angle),
-                rotate((-FOV_SLOPE * NEAR, NEAR), angle),
-                rotate((-FOV_SLOPE * FAR, FAR), angle),
-                rotate((FOV_SLOPE * FAR, FAR), angle)
-            ];
-
-            for p in trapezoid_coords.iter_mut() {
-                *p = (p.0 + x as f32, y as f32 - p.1);
-            }
+            trapezoid_coords = gen_trapezoid_coords(x, y, angle.to_radians());
         } else {
             return;
         }
@@ -401,8 +392,7 @@ impl App {
                         { // render_bottom
                             if terrain_bottom > 0.25 {
                                 let h = -64.0 + 128.0 * (terrain_bottom - 0.3);
-                                let corr = NEAR * (1.0 - t) + FAR * t;
-                                let h = 48.0 + h / (corr * FOV_SLOPE / PIXELS_PER_METER);
+                                let h = 48.0 + h * Self::scale_y(t);
 
                                 let h = h.clamp(0.0, 96.0) as usize;
                                 if h > max_h {
@@ -418,8 +408,7 @@ impl App {
                                 }
                             } else {
                                 let h = -64.0 + 128.0 * (-0.05);
-                                let corr = NEAR * (1.0 - t) + FAR * t;
-                                let h = 48.0 + h / (corr * FOV_SLOPE / PIXELS_PER_METER);
+                                let h = 48.0 + h * Self::scale_y(t);
 
                                 let h = h.clamp(0.0, 96.0) as usize;
                                 if h > max_h {
@@ -438,8 +427,7 @@ impl App {
 
                         { // render top
                             let h = -64.0 + 128.0 * terrain_top;
-                            let corr = NEAR * (1.0 - t) + FAR * t;
-                            let h = 48.0 + h / (corr * FOV_SLOPE / PIXELS_PER_METER);
+                            let h = 48.0 + h * Self::scale_y(t);
 
                             let h = 96 - h.clamp(0.0, 96.0) as usize;
                             if h < max_h_top {
@@ -460,6 +448,13 @@ impl App {
             }
         }
     }
+
+    #[inline(always)]
+    fn scale_y(t: f32) -> f32 {
+        let corr = utils::lerp(NEAR, FAR, t);
+        1.0 / (corr * FOV_SLOPE / PIXELS_PER_METER)
+    }
+
     fn draw_overlays(&self, ctx: &mut RetroBlitContext) {
         match self.overlay_state {
             AppOverlayState::Entry => {
@@ -655,6 +650,111 @@ Esc: Quit game
             }
         }
     }
+    fn render_objects(&mut self, ctx: &mut RetroBlitContext) {
+        //let trapezoid_coords;
+        let (forward, right, pos_x, pos_y);
+        if let Some((_, data)) = self.world.query::<(&Player, &Position, &Angle)>().iter().next() {
+            let (_, &Position { x, y }, &Angle(angle)) = data;
+            let angle = angle.to_radians();
+            forward = (angle.sin(), -angle.cos());
+            right = (angle.cos(), angle.sin());
+            pos_x = x;
+            pos_y = y;
+            //trapezoid_coords = gen_trapezoid_coords(x, y, angle);
+        } else {
+            return;
+        }
+
+        for (_, (&potion, &Position{ x, y})) in self.world.query_mut::<(&Potion, &Position)>() {
+            let d_p = (x - pos_x, y - pos_y);
+            let t = utils::dot(d_p, forward);
+            if (NEAR..=FAR).contains(&t) {
+                let depth = (t - NEAR) / (FAR - NEAR);
+                let u = utils::dot(d_p, right) / t / FOV_SLOPE;
+
+                let x_scale = 40.0 * Self::scale_y(depth);
+                let up = 48.0 - 24.0 * Self::scale_y(depth);
+                let down = 48.0 + 56.0 * Self::scale_y(depth);
+
+                let upper = (up).max(0.0) as usize;
+                let lower = (down).min(96.0) as usize;
+
+                let u_corr = (u + 1.0) * 79.5;
+                let left = u_corr - x_scale;
+                let right = u_corr + x_scale;
+
+                if left >= 0.0 || right < 160.0 {
+                    for j in upper..lower {
+                        let v = ((j as f32 - up) / (down - up)).clamp(0.0, 1.0);
+                        for i in left.max(0.0) as usize .. right.min(159.0) as usize {
+                            let u = ((i as f32 - left) / (right - left)).clamp(0.0, 1.0);
+                            let idx = j * 160 + i;
+
+                            let ix = (u * 23.0) as usize + 96;
+                            let iy = (v * 23.0) as usize + match potion {
+                                Potion::Health => 24,
+                                Potion::Mana => 0
+                            };
+
+                            let source_idx = self.graphics.get_width() * iy + ix;
+                            let color = self.graphics.get_buffer()[source_idx];
+
+                            if color != 0 && self.depth_buffer[idx] > depth {
+                                self.depth_buffer[idx] = depth;
+                                ctx.get_buffer_mut()[idx] = color;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        for (_, (&monster, &Position{ x, y})) in self.world.query_mut::<(&Monster, &Position)>() {
+            let d_p = (x - pos_x, y - pos_y);
+            let t = utils::dot(d_p, forward);
+            if (NEAR..=FAR).contains(&t) {
+                let depth = (t - NEAR) / (FAR - NEAR);
+                let u = utils::dot(d_p, right) / t / FOV_SLOPE;
+
+                let x_scale = 40.0 * Self::scale_y(depth);
+                let up = 48.0 - 24.0 * Self::scale_y(depth);
+                let down = 48.0 + 56.0 * Self::scale_y(depth);
+
+                let upper = (up).max(0.0) as usize;
+                let lower = (down).min(96.0) as usize;
+
+                let u_corr = (u + 1.0) * 79.5;
+                let left = u_corr - x_scale;
+                let right = u_corr + x_scale;
+
+                if left >= 0.0 || right < 160.0 {
+                    for j in upper..lower {
+                        let v = ((j as f32 - up) / (down - up)).clamp(0.0, 1.0);
+                        for i in left.max(0.0) as usize .. right.min(159.0) as usize {
+                            let u = ((i as f32 - left) / (right - left)).clamp(0.0, 1.0);
+                            let idx = j * 160 + i;
+
+                            let ix = (u * 23.0) as usize + match monster {
+                                Monster::Toad => 0,
+                                Monster::Kobold => 24,
+                                Monster::Rat => 48,
+                                Monster::Skeleton => 72
+                            };
+                            let iy = (v * 23.0) as usize;
+
+                            let source_idx = self.graphics.get_width() * iy + ix;
+                            let color = self.graphics.get_buffer()[source_idx];
+
+                            if color != 0 && self.depth_buffer[idx] > depth {
+                                self.depth_buffer[idx] = depth;
+                                ctx.get_buffer_mut()[idx] = color;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 impl ContextHandler for App {
@@ -740,10 +840,21 @@ fn main() {
     retro_blit::window::start(App::new());
 }
 
+#[inline(always)]
 fn rotate(p: (f32, f32), angle: f32) -> (f32, f32) {
     let sin_cos = (angle.sin(), angle.cos());
     (
         p.0 * sin_cos.1 + p.1 * sin_cos.0,
         -p.0 * sin_cos.0 + p.1 * sin_cos.1
     )
+}
+
+#[inline(always)]
+fn gen_trapezoid_coords(x: f32, y: f32, angle: f32) -> [(f32, f32); 4] {
+    [
+        rotate((FOV_SLOPE * NEAR, NEAR), angle),
+        rotate((-FOV_SLOPE * NEAR, NEAR), angle),
+        rotate((-FOV_SLOPE * FAR, FAR), angle),
+        rotate((FOV_SLOPE * FAR, FAR), angle)
+    ].map(|p| (p.0 + x as f32, y as f32 - p.1))
 }

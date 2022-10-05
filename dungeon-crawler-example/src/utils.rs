@@ -15,7 +15,6 @@ pub fn lerp(a: f32, b: f32, t: f32) -> f32 {
 }
 
 #[inline(always)]
-pub fn slerp(a: f32, b: f32, t: f32) -> f32 {
-    let t = t * t * (3.0 - 2.0 * t);
-    a * (1.0 - t) + b * t
+pub fn dot(a: (f32, f32), b: (f32, f32)) -> f32 {
+    a.0 * b.0 + a.1 * b.1
 }
