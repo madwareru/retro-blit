@@ -9,13 +9,14 @@ use crate::components::{Angle, HP, Monster, MP, Player, Position, Potion, Terrai
 use crate::map_data::{HeightMapEntry, MapData};
 use crate::terrain_tiles_data::TerrainTiles;
 
-const BAYER_LOOKUP: [u8; 16] = [
-    00, 08, 02, 10,
-    12, 04, 14, 06,
-    03, 11, 01, 09,
-    15, 07, 13, 05
+const BAYER_LOOKUP: [f32; 16] = [
+    00.0, 08.0, 02.0, 10.0,
+    12.0, 04.0, 14.0, 06.0,
+    03.0, 11.0, 01.0, 09.0,
+    15.0, 07.0, 13.0, 05.0
 ];
 
+const NOISE_PNG_BYTES: &[u8] = include_bytes!("noise.png");
 const MAP_BYTES: &[u8] = include_bytes!("map.im256");
 const GRAPHICS_BYTES: &[u8] = include_bytes!("dungeon_crawler.im256");
 const DARKEST_BLUE_IDX: usize = 0x02;
@@ -25,7 +26,6 @@ const VIEW_RANGE: f32 = 14.0;
 
 const NEAR: f32 = 0.05 * PIXELS_PER_METER;
 const FAR: f32 = PIXELS_PER_METER * VIEW_RANGE;
-const FOV_SLOPE: f32 = 0.7;
 const UNIT_H: f32 = -64.0 + 128.0 * 0.1;
 
 mod terrain_tiles_data;
@@ -40,9 +40,17 @@ pub enum AppOverlayState {
     MinimapView
 }
 
+pub enum DimLevel {
+    FullWithBlueNoise,
+    FullWithDither,
+    DimOnly
+}
+
 pub struct AppFlags {
     pub texture_terrain: bool,
-    pub terrain_rendering_step: f32
+    pub terrain_rendering_step: f32,
+    pub fov_slope: f32,
+    pub dim_level: DimLevel
 }
 
 pub struct App {
@@ -54,6 +62,7 @@ pub struct App {
     depth_buffer: Vec<f32>,
     font: Font,
     overlay_state: AppOverlayState,
+    noise_dither_lookup: Vec<f32>,
     world: World,
 }
 
@@ -61,8 +70,8 @@ impl App {
     pub fn new() -> Self {
         let mut jfa = jfa_cpu::MatrixJfa::new();
         let terrain_tiles = TerrainTiles::load(&mut jfa);
-        let mut world = hecs::World::new();
-        let map_data = map_data::MapData::load(MAP_BYTES);
+        let mut world = World::new();
+        let map_data = MapData::load(MAP_BYTES);
         let (palette, graphics) = retro_blit::format_loaders::im_256::Image
         ::load_from(GRAPHICS_BYTES)
             .unwrap();
@@ -75,6 +84,17 @@ impl App {
         }
         map_data.populate_world(&mut world);
         let font = Font::default_font_small().unwrap();
+
+        let noise_img = image::load_from_memory(NOISE_PNG_BYTES)
+            .unwrap()
+            .to_luma8();
+
+        let noise_dither_lookup = noise_img
+            .as_raw()
+            .iter()
+            .map(|&it| it as f32 / 255.0)
+            .collect();
+
         Self {
             scroll_timer: 0.0,
             terrain_tiles,
@@ -83,10 +103,13 @@ impl App {
             depth_buffer,
             flags: AppFlags {
                 texture_terrain: true,
-                terrain_rendering_step: 1.0 / 256.0
+                terrain_rendering_step: 1.0 / 256.0,
+                fov_slope: 1.0,
+                dim_level: DimLevel::FullWithDither
             },
             font,
             overlay_state: AppOverlayState::Entry,
+            noise_dither_lookup,
             world,
         }
     }
@@ -103,13 +126,21 @@ impl App {
                 }
 
                 let tint = self.depth_buffer[idx];
-                let tint = tint * 4.05;
+                let tint = tint * 5.0;
 
                 let tint_offset = tint as u8;
-                let tint_t = (tint.fract() * 16.0) as u8;
+                let tint_t = tint.fract();
 
-                let lookup_idx = (j % 4) * 4 + i % 4;
-                let bayer = BAYER_LOOKUP[lookup_idx];
+                let threshold = match self.flags.dim_level {
+                    DimLevel::FullWithBlueNoise => {
+                        let lookup_idx = (j % 128) * 128 + i % 128;
+                        self.noise_dither_lookup[lookup_idx]
+                    }
+                    _ => {
+                        let lookup_idx = (j % 4) * 4 + i % 4;
+                        BAYER_LOOKUP[lookup_idx] / 16.0
+                    }
+                };
 
                 if tint_offset >= 4 {
                     buffer[idx] = darkest_blue;
@@ -120,7 +151,14 @@ impl App {
                     } else {
                         ix + 64
                     };
-                    buffer[idx] = if tint_t <= bayer { ix } else { next_ix };
+                    buffer[idx] = match self.flags.dim_level {
+                        DimLevel::FullWithBlueNoise | DimLevel::FullWithDither => {
+                            if tint_t <= threshold { ix } else { next_ix }
+                        }
+                        DimLevel::DimOnly => {
+                            ix
+                        }
+                    };
                 }
             }
         }
@@ -193,7 +231,7 @@ impl App {
         let trapezoid_coords;
         if let Some((_, data)) = self.world.query::<(&Player, &Position, &Angle)>().iter().next() {
             let (_, &Position { x, y }, &Angle(angle)) = data;
-            trapezoid_coords = gen_trapezoid_coords(x, y, angle.to_radians());
+            trapezoid_coords = gen_trapezoid_coords(x, y, angle.to_radians(), self.flags.fov_slope);
         } else {
             return;
         }
@@ -392,7 +430,7 @@ impl App {
                         { // render_bottom
                             if terrain_bottom > 0.25 {
                                 let h = -64.0 + 128.0 * (terrain_bottom - 0.3);
-                                let h = 48.0 + h * Self::scale_y(t);
+                                let h = 48.0 + h * Self::scale_y(t, self.flags.fov_slope);
 
                                 let h = h.clamp(0.0, 96.0) as usize;
                                 if h > max_h {
@@ -408,7 +446,7 @@ impl App {
                                 }
                             } else {
                                 let h = -64.0 + 128.0 * (-0.05);
-                                let h = 48.0 + h * Self::scale_y(t);
+                                let h = 48.0 + h * Self::scale_y(t, self.flags.fov_slope);
 
                                 let h = h.clamp(0.0, 96.0) as usize;
                                 if h > max_h {
@@ -427,7 +465,7 @@ impl App {
 
                         { // render top
                             let h = -64.0 + 128.0 * terrain_top;
-                            let h = 48.0 + h * Self::scale_y(t);
+                            let h = 48.0 + h * Self::scale_y(t, self.flags.fov_slope);
 
                             let h = 96 - h.clamp(0.0, 96.0) as usize;
                             if h < max_h_top {
@@ -450,9 +488,9 @@ impl App {
     }
 
     #[inline(always)]
-    fn scale_y(t: f32) -> f32 {
+    fn scale_y(t: f32, fov_slope: f32) -> f32 {
         let corr = utils::lerp(NEAR, FAR, t);
-        1.0 / (corr * FOV_SLOPE / PIXELS_PER_METER)
+        1.0 / (corr * fov_slope / PIXELS_PER_METER)
     }
 
     fn draw_overlays(&self, ctx: &mut RetroBlitContext) {
@@ -478,9 +516,9 @@ impl App {
                     VerticalAlignment::Center,
 
                     r##"Arrows: Movement
-Shift: Strafe
-Return: Cast a magic
-0: Toggle terrain texturing
+Alt: Strafe
+Ctrl: Cast a magic
+Num keys 9, 0: just check out
 -/=: Tweak terrain quality
 F1: Toggle help
 Tab: Toggle map
@@ -499,17 +537,17 @@ Esc: Quit game
     fn update_input(&mut self, ctx: &mut RetroBlitContext, dt: f32) {
         let (strafe_speed, turn_speed) = match (ctx.is_key_pressed(KeyCode::Left), ctx.is_key_pressed(KeyCode::Right)) {
             (true, false) => {
-                if ctx.is_key_mod_pressed(KeyMod::Shift) {
+                if ctx.is_key_mod_pressed(KeyMod::Option) {
                     (180.0, 0.0)
                 } else {
-                    (0.0, -60.0)
+                    (0.0, -120.0)
                 }
             }
             (false, true) => {
-                if ctx.is_key_mod_pressed(KeyMod::Shift) {
+                if ctx.is_key_mod_pressed(KeyMod::Option) {
                     (-180.0, 0.0)
                 } else {
-                    (0.0, 60.0)
+                    (0.0, 120.0)
                 }
             }
             _ => (0.0, 0.0)
@@ -670,11 +708,11 @@ Esc: Quit game
             let t = utils::dot(d_p, forward);
             if (NEAR..=FAR).contains(&t) {
                 let depth = (t - NEAR) / (FAR - NEAR);
-                let u = utils::dot(d_p, right) / t / FOV_SLOPE;
+                let u = utils::dot(d_p, right) / t / self.flags.fov_slope;
 
-                let x_scale = 40.0 * Self::scale_y(depth);
-                let up = 48.0 - 24.0 * Self::scale_y(depth);
-                let down = 48.0 + 56.0 * Self::scale_y(depth);
+                let x_scale = 40.0 * Self::scale_y(depth, self.flags.fov_slope);
+                let up = 48.0 - 24.0 * Self::scale_y(depth, self.flags.fov_slope);
+                let down = 48.0 + 56.0 * Self::scale_y(depth, self.flags.fov_slope);
 
                 let upper = (up).max(0.0) as usize;
                 let lower = (down).min(96.0) as usize;
@@ -714,11 +752,11 @@ Esc: Quit game
             let t = utils::dot(d_p, forward);
             if (NEAR..=FAR).contains(&t) {
                 let depth = (t - NEAR) / (FAR - NEAR);
-                let u = utils::dot(d_p, right) / t / FOV_SLOPE;
+                let u = utils::dot(d_p, right) / t / self.flags.fov_slope;
 
-                let x_scale = 40.0 * Self::scale_y(depth);
-                let up = 48.0 - 24.0 * Self::scale_y(depth);
-                let down = 48.0 + 56.0 * Self::scale_y(depth);
+                let x_scale = 40.0 * Self::scale_y(depth, self.flags.fov_slope);
+                let up = 48.0 - 24.0 * Self::scale_y(depth, self.flags.fov_slope);
+                let down = 48.0 + 56.0 * Self::scale_y(depth, self.flags.fov_slope);
 
                 let upper = (up).max(0.0) as usize;
                 let lower = (down).min(96.0) as usize;
@@ -764,8 +802,39 @@ impl ContextHandler for App {
 
     fn on_key_up(&mut self, ctx: &mut RetroBlitContext, key_code: KeyCode, _key_mods: KeyMods) {
         match key_code {
+            KeyCode::Key1 => {
+                self.flags.fov_slope = 0.7;
+            },
+            KeyCode::Key2 => {
+                self.flags.fov_slope = 0.8;
+            },
+            KeyCode::Key3 => {
+                self.flags.fov_slope = 0.9;
+            },
+            KeyCode::Key4 => {
+                self.flags.fov_slope = 1.0;
+            },
+            KeyCode::Key5 => {
+                self.flags.fov_slope = 1.1;
+            },
+            KeyCode::Key6 => {
+                self.flags.fov_slope = 1.2;
+            },
+            KeyCode::Key7 => {
+                self.flags.fov_slope = 1.3;
+            },
+            KeyCode::Key8 => {
+                self.flags.fov_slope = 1.4;
+            },
             KeyCode::Key0 => {
                 self.flags.texture_terrain = !self.flags.texture_terrain;
+            },
+            KeyCode::Key9 => {
+                self.flags.dim_level = match self.flags.dim_level {
+                    DimLevel::FullWithBlueNoise => DimLevel::FullWithDither,
+                    DimLevel::FullWithDither => DimLevel::DimOnly,
+                    DimLevel::DimOnly => DimLevel::FullWithBlueNoise
+                };
             },
             KeyCode::Minus => {
                 self.flags.terrain_rendering_step = (self.flags.terrain_rendering_step * 2.0)
@@ -800,14 +869,14 @@ impl ContextHandler for App {
         for i in 0..4 {
             for &pal_color in self.palette.iter() {
                 let warm_overlay = [
-                    if pal_color[0] < 225 { pal_color[0] + 30 } else { 255 },
-                    if pal_color[1] < 238 { pal_color[1] + 17 } else { 255 },
+                    if pal_color[0] < 235 { pal_color[0] + 20 } else { 255 },
+                    if pal_color[1] < 246 { pal_color[1] + 9 } else { 255 },
                     pal_color[2]
                 ];
                 let darken = [
-                    ((pal_color[0] as u16 * 70) / 100) as u8,
-                    ((pal_color[1] as u16 * 70) / 100) as u8,
-                    ((pal_color[2] as u16 * 90) / 100) as u8
+                    ((pal_color[0] as u16 * 85) / 100) as u8,
+                    ((pal_color[1] as u16 * 85) / 100) as u8,
+                    ((pal_color[2] as u16 * 92) / 100) as u8
                 ];
                 ctx.set_palette(
                     offset,
@@ -850,11 +919,11 @@ fn rotate(p: (f32, f32), angle: f32) -> (f32, f32) {
 }
 
 #[inline(always)]
-fn gen_trapezoid_coords(x: f32, y: f32, angle: f32) -> [(f32, f32); 4] {
+fn gen_trapezoid_coords(x: f32, y: f32, angle: f32, fov_slope: f32) -> [(f32, f32); 4] {
     [
-        rotate((FOV_SLOPE * NEAR, NEAR), angle),
-        rotate((-FOV_SLOPE * NEAR, NEAR), angle),
-        rotate((-FOV_SLOPE * FAR, FAR), angle),
-        rotate((FOV_SLOPE * FAR, FAR), angle)
+        rotate((fov_slope * NEAR, NEAR), angle),
+        rotate((-fov_slope * NEAR, NEAR), angle),
+        rotate((-fov_slope * FAR, FAR), angle),
+        rotate((fov_slope * FAR, FAR), angle)
     ].map(|p| (p.0 + x as f32, y as f32 - p.1))
 }
