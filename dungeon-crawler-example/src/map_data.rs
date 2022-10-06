@@ -152,24 +152,24 @@ impl MapData {
         world.spawn((wang_terrain,));
 
         for (&pos, &potion) in self.potions.iter() {
-            let position = Position { x: pos[0] as f32 * 64.0 - 32.0, y: pos[1] as f32 * 64.0 - 32.0 };
+            let position = Position { x: pos[0] as f32 * 64.0, y: pos[1] as f32 * 64.0 };
             world.spawn((position, potion));
         }
 
         for (&pos, &monster) in self.monsters.iter() {
-            let position = Position { x: pos[0] as f32 * 64.0 - 32.0, y: pos[1] as f32 * 64.0 - 32.0 };
+            let position = Position { x: pos[0] as f32 * 64.0, y: pos[1] as f32 * 64.0 };
             world.spawn((position, monster));
         }
 
         let player_position = Position {
-            x: self.player_entry_point[0] as f32 * 64.0 - 32.0,
-            y: self.player_entry_point[1] as f32 * 64.0 - 32.0
+            x: self.player_entry_point[0] as f32 * 64.0,
+            y: self.player_entry_point[1] as f32 * 64.0
         };
         world.spawn((
             Player,
             player_position,
-            HP(100),
-            MP(100),
+            HP(0),
+            MP(0),
             Angle(0.0)
         ));
     }

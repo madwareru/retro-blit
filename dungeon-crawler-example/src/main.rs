@@ -26,7 +26,6 @@ const VIEW_RANGE: f32 = 14.0;
 
 const NEAR: f32 = 0.05 * PIXELS_PER_METER;
 const FAR: f32 = PIXELS_PER_METER * VIEW_RANGE;
-const UNIT_H: f32 = -64.0 + 128.0 * 0.1;
 
 mod terrain_tiles_data;
 mod map_data;
@@ -115,7 +114,7 @@ impl App {
     }
 
     fn fade(&mut self, ctx: &mut RetroBlitContext) {
-        let darkest_blue = DARKEST_BLUE_IDX as u8 + 64;
+        let darkest_blue = DARKEST_BLUE_IDX as u8 + 72;
         let buffer = ctx.get_buffer_mut();
         for j in 0..96 {
             for i in 0..160 {
@@ -126,7 +125,7 @@ impl App {
                 }
 
                 let tint = self.depth_buffer[idx];
-                let tint = tint * 5.0;
+                let tint = tint * 7.9;
 
                 let tint_offset = tint as u8;
                 let tint_t = tint.fract();
@@ -142,14 +141,14 @@ impl App {
                     }
                 };
 
-                if tint_offset >= 4 {
+                if tint_offset >= 7 {
                     buffer[idx] = darkest_blue;
                 } else {
-                    let ix = buffer[idx] + tint_offset * 64;
-                    let next_ix = if tint_offset == 3 {
+                    let ix = buffer[idx] + tint_offset * 36;
+                    let next_ix = if tint_offset == 6 {
                         darkest_blue
                     } else {
-                        ix + 64
+                        ix + 36
                     };
                     buffer[idx] = match self.flags.dim_level {
                         DimLevel::FullWithBlueNoise | DimLevel::FullWithDither => {
@@ -206,7 +205,7 @@ impl App {
     }
 
     fn render(&mut self, ctx: &mut RetroBlitContext) {
-        ctx.clear(66);
+        ctx.clear(72);
 
         self.clear_depth_buffer();
 
@@ -580,10 +579,12 @@ Esc: Quit game
 
         while self.scroll_timer > 0.2 {
             self.scroll_timer -= 0.2;
-            ctx.scroll_palette(ScrollKind::Range { start_idx: 26, len: 6 }, ScrollDirection::Forward);
-            ctx.scroll_palette(ScrollKind::Range { start_idx: 26 + 64, len: 6 }, ScrollDirection::Forward);
-            ctx.scroll_palette(ScrollKind::Range { start_idx: 26 + 128, len: 6 }, ScrollDirection::Forward);
-            ctx.scroll_palette(ScrollKind::Range { start_idx: 26 + 192, len: 6 }, ScrollDirection::Forward);
+            for i in 0..7 {
+                ctx.scroll_palette(
+                    ScrollKind::Range { start_idx: 26 + 36 * i, len: 6 },
+                    ScrollDirection::Forward
+                );
+            }
         }
     }
     fn render_minimap(&self, ctx: &mut RetroBlitContext) {
@@ -866,7 +867,7 @@ impl ContextHandler for App {
     fn init(&mut self, ctx: &mut RetroBlitContext) {
         let mut offset = 0;
         let darkest_blue = self.palette[DARKEST_BLUE_IDX];
-        for i in 0..4 {
+        for i in 0..7 {
             for &pal_color in self.palette.iter() {
                 let warm_overlay = [
                     if pal_color[0] < 235 { pal_color[0] + 20 } else { 255 },
@@ -878,19 +879,34 @@ impl ContextHandler for App {
                     ((pal_color[1] as u16 * 85) / 100) as u8,
                     ((pal_color[2] as u16 * 92) / 100) as u8
                 ];
+                let near_full_dark = [
+                    ((darkest_blue[0] as u16 * 3 + darken[0] as u16) / 4) as u8,
+                    ((darkest_blue[1] as u16 * 3 + darken[1] as u16) / 4) as u8,
+                    ((darkest_blue[2] as u16 * 3 + darken[2] as u16) / 4) as u8
+                ];
+
                 ctx.set_palette(
                     offset,
                     match i {
                         0 => warm_overlay,
-                        1 => pal_color,
-                        2 => darken,
-                        _ => {
-                            [
-                                ((darkest_blue[0] as u16 + darken[0] as u16) / 2) as u8,
-                                ((darkest_blue[1] as u16 + darken[1] as u16) / 2) as u8,
-                                ((darkest_blue[2] as u16 + darken[2] as u16) / 2) as u8
-                            ]
-                        }
+                        1 => [
+                            ((warm_overlay[0] as u16 + pal_color[0] as u16) / 2) as u8,
+                            ((warm_overlay[1] as u16 + pal_color[1] as u16) / 2) as u8,
+                            ((warm_overlay[2] as u16 + pal_color[2] as u16) / 2) as u8
+                        ],
+                        2 => pal_color,
+                        3 => [
+                            ((darken[0] as u16 + pal_color[0] as u16) / 2) as u8,
+                            ((darken[1] as u16 + pal_color[1] as u16) / 2) as u8,
+                            ((darken[2] as u16 + pal_color[2] as u16) / 2) as u8
+                        ],
+                        4 => darken,
+                        5 => [
+                            ((darken[0] as u16 + near_full_dark[0] as u16) / 2) as u8,
+                            ((darken[1] as u16 + near_full_dark[1] as u16) / 2) as u8,
+                            ((darken[2] as u16 + near_full_dark[2] as u16) / 2) as u8
+                        ],
+                        _ => near_full_dark
                     },
                 );
                 if offset < 255 { offset += 1; }
