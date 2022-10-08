@@ -30,6 +30,7 @@ const FAR: f32 = PIXELS_PER_METER * VIEW_RANGE;
 mod terrain_tiles_data;
 mod map_data;
 mod components;
+mod collision;
 mod utils;
 
 pub enum AppOverlayState {
@@ -102,9 +103,9 @@ impl App {
             depth_buffer,
             flags: AppFlags {
                 texture_terrain: true,
-                terrain_rendering_step: 1.0 / 256.0,
+                terrain_rendering_step: 1.0 / 512.0,
                 fov_slope: 1.0,
-                dim_level: DimLevel::FullWithDither
+                dim_level: DimLevel::DimOnly
             },
             font,
             overlay_state: AppOverlayState::Entry,
@@ -875,8 +876,8 @@ impl ContextHandler for App {
                     pal_color[2]
                 ];
                 let darken = [
-                    ((pal_color[0] as u16 * 85) / 100) as u8,
-                    ((pal_color[1] as u16 * 85) / 100) as u8,
+                    ((pal_color[0] as u16 * 80) / 100) as u8,
+                    ((pal_color[1] as u16 * 80) / 100) as u8,
                     ((pal_color[2] as u16 * 92) / 100) as u8
                 ];
                 let near_full_dark = [
