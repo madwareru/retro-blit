@@ -2,7 +2,32 @@ use glam::Vec3Swizzles;
 use crate::math_utils::CrossProduct2;
 use crate::rendering::transform::Transform;
 
-pub(crate) trait RaySegmentIntersectionQuery where Self: Copy {
+pub trait RayCircleIntersectionQuery where Self: Copy {
+    fn ray_circle_intersection_t(self, dir: Self, center: Self, radius: f32) -> Option<f32>;
+}
+
+impl RayCircleIntersectionQuery for glam::Vec2 {
+    fn ray_circle_intersection_t(self, dir: Self, center: Self, radius: f32) -> Option<f32> {
+        let origin = self;
+        let oc = origin - center;
+        let a = dir.dot(dir);
+        let b = 2.0 * oc.dot(dir);
+        let c = oc.dot(oc) - radius * radius;
+        let discriminant = b * b - 4.0 * a * c;
+        if discriminant < 0.0 {
+            None
+        } else {
+            let t = (-b - discriminant.sqrt()) / (2.0 * a);
+            if t < 0.0 {
+                None
+            } else {
+                Some(t)
+            }
+        }
+    }
+}
+
+pub trait RaySegmentIntersectionQuery where Self: Copy {
     fn ray_segment_intersection_t(self, dir: Self, segment: [Self; 2]) -> Option<f32>;
 }
 
@@ -191,5 +216,54 @@ impl PointInPolyQuery for (i16, i16) {
                 }
             });
         intersection_count % 2 != 0
+    }
+}
+
+pub trait SegmentCircleCastQuery where Self: Copy {
+    fn circle_cast_segment(self, dir: Self, radius: f32, segment: [Self; 2]) -> Option<(f32, Self)>;
+}
+
+impl SegmentCircleCastQuery for glam::Vec2 {
+    fn circle_cast_segment(self, p_dir: Self, radius: f32, [p0, p1]: [Self; 2]) -> Option<(f32, Self)> {
+        let (ba, oa) = (p1 - p0, self - p0);
+        let (baba, bard, baoa, rdoa, oaoa) = (
+            ba.dot(ba),
+            ba.dot(p_dir),
+            ba.dot(oa),
+            p_dir.dot(oa),
+            oa.dot(oa)
+        );
+        let (a, b, c) = (
+            baba - bard * bard,
+            baba * rdoa - baoa * bard,
+            baba * oaoa - baoa * baoa - radius * radius *baba
+        );
+        let h = b * b - a * c;
+        if h >= 0.0 {
+            let t = (-b - h.sqrt()) / a;
+            let y = baoa + t * bard;
+            if  y > 0.0 && y < baba {  // body
+                Some(t)
+            } else { //caps
+                let oc = if y <= 0.0 {oa} else {self - p1};
+                let b = p_dir.dot(oc);
+                let c = oc.dot(oc) - radius * radius;
+                let h = b * b - c;
+                if h > 0.0 {
+                    let t = -b - h.sqrt();
+                    Some(t)
+                } else {
+                    None
+                }
+            }
+        } else {
+            None
+        }.and_then(|t| if t < -radius { None } else { Some(t) })
+        .map(|t| {
+            let pos = self + p_dir * t;
+            let pa = pos - p0;
+            let h = (pa.dot(ba) / baba).clamp(0.0, 1.0);
+            (t, (pa - h * ba) / radius)
+        })
     }
 }
