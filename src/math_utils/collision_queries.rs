@@ -258,7 +258,7 @@ impl SegmentCircleCastQuery for glam::Vec2 {
             }
         } else {
             None
-        }.and_then(|t| if t < -radius { None } else { Some(t) })
+        }.and_then(|t| if t < 0.0 { None } else { Some(t) })
         .map(|t| {
             let pos = self + p_dir * t;
             let pa = pos - p0;
