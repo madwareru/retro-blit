@@ -5,6 +5,7 @@ use retro_blit::rendering::bresenham::{BresenhamCircleDrawer, LineRasterizer};
 use retro_blit::rendering::fonts::font_align::{HorizontalAlignment, VerticalAlignment};
 use retro_blit::rendering::fonts::tri_spaced::{Font, TextDrawer};
 use retro_blit::window::{ContextHandler, KeyCode, KeyMod, KeyMods, RetroBlitContext, ScrollDirection, ScrollKind, WindowMode};
+use crate::collision::{CollisionTag, CollisionVec};
 use crate::components::{Angle, HP, Monster, MP, Player, Position, Potion, TerrainProp, TileInfo, WangHeightMapEntry, WangTerrain, WangTerrainEntry};
 use crate::map_data::{HeightMapEntry, MapData};
 use crate::terrain_tiles_data::TerrainTiles;
@@ -563,15 +564,22 @@ Esc: Quit game
             _ => 0.0
         };
 
-        for (_, player_data) in self.world.query_mut::<(&mut Player, &mut Position, &mut Angle)>() {
+        if let Some((_, player_data)) = self.world.query::<(&mut Player, &mut Position, &mut Angle)>().iter().next() {
             let (_, pos, angle) = player_data;
             angle.0 += turn_speed * dt;
             let angle = angle.0.to_radians();
             let (s, c) = (angle.sin() * dt, angle.cos() * dt);
             let speed_x = movement_speed * s - strafe_speed * c;
             let speed_y = - movement_speed * c - strafe_speed * s;
-            pos.x = pos.x + speed_x;
-            pos.y = pos.y + speed_y;
+
+            if let Some((_, (wang_data,))) = self.world.query::<(&WangTerrain,)>().iter().next() {
+                *pos = collision::move_position_towards(
+                    *pos,
+                    glam::vec2(speed_x, speed_y),
+                    CollisionTag::All,
+                    wang_data
+                );
+            }
         }
     }
 
@@ -589,10 +597,6 @@ Esc: Quit game
         }
     }
     fn render_minimap(&self, ctx: &mut RetroBlitContext) {
-        let sprite_sheet_with_color_key = self
-            .graphics
-            .with_color_key(0);
-
         let start_x;
         let start_y;
         let angle;
@@ -609,70 +613,40 @@ Esc: Quit game
             return;
         }
 
+        let mut collision_vec = CollisionVec::new();
+
         if let Some((_, (wang_terrain, ))) = self.world.query::<(&WangTerrain, )>().iter().next() {
             for j in 0..MapData::HEIGHT-1 {
                 for i in 0..MapData::WIDTH-1 {
-                    let x = start_x + i as i32 * 4;
-                    let y = start_y + j as i32 * 4;
                     let idx = j * (MapData::WIDTH-1) + i;
                     if !wang_terrain.seen_tiles.contains(&[i as u16, j as u16]) {
                         continue;
                     }
 
-                    let tile = wang_terrain.tiles[idx].bottom;
-
-                    let mut water_wang = 0;
-                    let mut wall_wang = 0;
-
-                    match tile.north_east {
-                        HeightMapEntry::Water => {
-                            water_wang += 0b0001;
-                        }
-                        HeightMapEntry::Floor => {}
-                        HeightMapEntry::Wall => {
-                            wall_wang += 0b0001;}
-                    }
-                    match tile.north_west {
-                        HeightMapEntry::Water => {
-                            water_wang += 0b0010;
-                        }
-                        HeightMapEntry::Floor => {}
-                        HeightMapEntry::Wall => {
-                            wall_wang += 0b0010;}
-                    }
-                    match tile.south_east {
-                        HeightMapEntry::Water => {
-                            water_wang += 0b0100;
-                        }
-                        HeightMapEntry::Floor => {}
-                        HeightMapEntry::Wall => {
-                            wall_wang += 0b0100;}
-                    }
-                    match tile.south_west {
-                        HeightMapEntry::Water => {
-                            water_wang += 0b1000;
-                        }
-                        HeightMapEntry::Floor => {}
-                        HeightMapEntry::Wall => {
-                            wall_wang += 0b1000;}
-                    }
-
-                    if water_wang != 0 {
-                        let i = water_wang % 4;
-                        let j = water_wang / 4;
-                        BlitBuilder::create(ctx, &sprite_sheet_with_color_key)
-                            .with_source_subrect(80 + i * 4, 80 + j * 4, 4, 4)
-                            .with_dest_pos(80 + x as i16, 48 + y as i16)
-                            .blit();
-                    }
-
-                    if wall_wang != 0 {
-                        let i = wall_wang % 4;
-                        let j = wall_wang / 4;
-                        BlitBuilder::create(ctx, &sprite_sheet_with_color_key)
-                            .with_source_subrect(96 + i * 4, 80 + j * 4, 4, 4)
-                            .with_dest_pos(80 + x as i16, 48 + y as i16)
-                            .blit();
+                    collision_vec.clear();
+                    collision::populate_collisions(
+                        &mut collision_vec,
+                        &wang_terrain.tiles[idx],
+                        i as f32 * 64.0,
+                        j as f32 * 64.0
+                    );
+                    for collision in collision_vec.iter() {
+                        let p0 = (
+                            80 + start_x as i16 + (collision.x0 / 16.0) as i16,
+                            48 + start_y as i16 + (collision.y0 / 16.0) as i16
+                        );
+                        let p1 = (
+                            80 + start_x as i16 + (collision.x1 / 16.0) as i16,
+                            48 + start_y as i16 + (collision.y1 / 16.0) as i16
+                        );
+                        LineRasterizer::create(ctx)
+                            .from(p0)
+                            .to(p1)
+                            .rasterize(match collision.tag {
+                                CollisionTag::Water => 35,
+                                CollisionTag::Wall => 14,
+                                CollisionTag::All => 12
+                            });
                     }
 
                     BresenhamCircleDrawer::create(ctx)
@@ -680,18 +654,18 @@ Esc: Quit game
                         .with_radius(4)
                         .draw(12);
 
-                    let view_vec = (-6.0 * angle.sin(), 6.0 * angle.cos());
+                    let view_vec = (6.0 * angle.sin(), -6.0 * angle.cos());
 
                     LineRasterizer::create(ctx)
                         .from((80, 48))
-                        .to(((80.0 - view_vec.0) as _, (48.0 - view_vec.1) as _))
+                        .to(((80.0 + view_vec.0) as _, (48.0 + view_vec.1) as _))
                         .rasterize(12);
                 }
             }
         }
     }
+
     fn render_objects(&mut self, ctx: &mut RetroBlitContext) {
-        //let trapezoid_coords;
         let (forward, right, pos_x, pos_y);
         if let Some((_, data)) = self.world.query::<(&Player, &Position, &Angle)>().iter().next() {
             let (_, &Position { x, y }, &Angle(angle)) = data;
@@ -700,7 +674,6 @@ Esc: Quit game
             right = (angle.cos(), angle.sin());
             pos_x = x;
             pos_y = y;
-            //trapezoid_coords = gen_trapezoid_coords(x, y, angle);
         } else {
             return;
         }

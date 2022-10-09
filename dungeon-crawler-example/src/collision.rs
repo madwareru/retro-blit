@@ -1,10 +1,17 @@
 use smallvec::SmallVec;
-use crate::{HeightMapEntry, WangTerrainEntry};
+use retro_blit::math_utils::collision_queries::SegmentCircleCastQuery;
+use crate::{HeightMapEntry, MapData, Position, WangTerrain, WangTerrainEntry};
 
-#[derive(Copy, Clone)]
+const SKIN: f32 = 2.5;
+const RADIUS: f32 = 32.0;
+const MINIMAL_DISTANCE: f32 = 0.001;
+const MOVE_ITERATIONS: u8 = 8;
+
+#[derive(Copy, Clone, PartialEq)]
 pub enum CollisionTag {
     Water,
-    Wall
+    Wall,
+    All
 }
 
 impl Default for CollisionTag {
@@ -22,7 +29,7 @@ pub struct CollisionRegion {
     pub tag: CollisionTag
 }
 
-pub type CollisionVec = SmallVec<[CollisionRegion; 16]>;
+pub type CollisionVec = SmallVec<[CollisionRegion; 18]>;
 
 pub fn populate_collisions(
     collision_vec: &mut CollisionVec,
@@ -407,5 +414,129 @@ pub fn populate_collisions(
             );
         },
         _ => ()
+    }
+}
+
+fn cast_circle(
+    collisions: &CollisionVec,
+    origin: glam::Vec2,
+    p_dir: glam::Vec2,
+    radius: f32,
+    tag: CollisionTag
+) -> Option<(f32, glam::Vec2)> {
+    let mut t = None;
+    for collision in collisions.iter() {
+        if tag != CollisionTag::All && collision.tag != tag {
+            continue;
+        }
+        match (
+            t,
+            SegmentCircleCastQuery::circle_cast_segment(
+                origin,
+                p_dir,
+                radius + SKIN,
+                [
+                    glam::vec2(collision.x0, collision.y0),
+                    glam::vec2(collision.x1, collision.y1)
+                ]
+            )
+        ) {
+            (None, next) => t = next,
+            (Some(
+                (old_t, _)),
+                Some((new_t, norm))
+            ) if new_t < old_t => t = Some((new_t, norm)),
+            _ => ()
+        }
+    }
+
+    t.map(|(t, normal)| (t - SKIN * 2.0, normal))
+}
+
+pub fn move_position_towards(
+    pos: Position,
+    direction: glam::Vec2,
+    collision_tag: CollisionTag,
+    terrain_tiles_data: &WangTerrain
+) -> Position {
+    let mut distance_to_go = direction.length();
+    let mut current_dir = direction.normalize_or_zero();
+    let mut current_pos = glam::vec2(pos.x, pos.y);
+
+    let mut collision_vec = CollisionVec::new();
+    let mut ii = (pos.x / 64.0) as usize;
+    let mut jj = (pos.y / 64.0) as usize;
+    for j in (if jj > 0 {jj-1} else {jj}) ..= (if jj < MapData::WIDTH - 2 { jj + 1} else {jj}) {
+        for i in (if ii > 0 {ii-1} else {ii}) ..= (if ii < MapData::WIDTH - 2 { ii + 1} else {ii}) {
+            let idx = j * (MapData::WIDTH - 1) + i;
+            populate_collisions(
+                &mut collision_vec,
+                &terrain_tiles_data.tiles[idx],
+                i as f32 * 64.0,
+                j as f32 * 64.0
+            );
+        }
+    }
+
+    for _ in 0..MOVE_ITERATIONS {
+        if distance_to_go < MINIMAL_DISTANCE {
+            break;
+        }
+
+        let new_ii = (current_pos.x / 64.0) as usize;
+        let new_jj = (current_pos.y / 64.0) as usize;
+        if ii != new_ii || jj != new_jj {
+            collision_vec.clear();
+            ii = new_ii;
+            jj = new_jj;
+            for j in (if jj > 0 {jj-1} else {jj}) ..= (if jj < MapData::WIDTH - 2 { jj + 1} else {jj}) {
+                for i in (if ii > 0 {ii-1} else {ii}) ..= (if ii < MapData::WIDTH - 2 { ii + 1} else {ii}) {
+                    let idx = j * (MapData::WIDTH - 1) + i;
+                    populate_collisions(
+                        &mut collision_vec,
+                        &terrain_tiles_data.tiles[idx],
+                        i as f32 * 64.0,
+                        j as f32 * 64.0
+                    );
+                }
+            }
+        }
+
+        distance_to_go = match cast_circle(
+            &collision_vec,
+            current_pos,
+            current_dir,
+            RADIUS,
+            collision_tag
+        ) {
+            None =>  {
+                current_pos += current_dir * distance_to_go;
+                0.0
+            },
+            Some((distance, _)) if distance >= distance_to_go =>  {
+                current_pos += current_dir * distance_to_go;
+                0.0
+            },
+            Some((direct_distance, normal)) => {
+                let rest_distance = distance_to_go - direct_distance;
+                current_pos += current_dir * direct_distance;
+
+                current_dir = {
+                    let dir_rest = current_dir * rest_distance;
+                    let norm_proj = normal * dir_rest.dot(normal);
+                    dir_rest - norm_proj
+                };
+
+                let distance = current_dir.length();
+                current_dir = current_dir.normalize_or_zero();
+
+                distance
+            }
+        }
+    }
+
+    Position {
+        x: current_pos.x,
+        y: current_pos.y
     }
 }

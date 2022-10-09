@@ -168,8 +168,8 @@ impl MapData {
         world.spawn((
             Player,
             player_position,
-            HP(0),
-            MP(0),
+            HP(100),
+            MP(100),
             Angle(0.0)
         ));
     }

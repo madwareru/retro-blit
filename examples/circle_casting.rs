@@ -4,64 +4,15 @@ use retro_blit::window::{RetroBlitContext, ContextHandler, WindowMode, KeyCode};
 
 const SKIN: f32 = 2.5;
 const MINIMAL_DISTANCE: f32 = 0.001;
-const TURN_SPEED: f32 = 80.0;
+const TURN_SPEED: f32 = 180.0;
 const MOVEMENT_SPEED: f32 = 80.0;
-const RADIUS: f32 = 32.0;
+const RADIUS: f32 = 4.0;
+const MOVE_ITERATIONS: u8 = 8;
 
 struct App {
     angle: f32,
     pos: glam::Vec2,
     segments: Vec<[glam::Vec2; 2]>
-}
-
-impl App {
-    fn move_towards(&mut self, ctx: &mut RetroBlitContext, dir: glam::Vec2) {
-        let mut current_dir = dir;
-        let mut distance_to_go = dir.length();
-        current_dir /= distance_to_go;
-        let mut current_pos = self.pos;
-
-        for _ in 0..4 {
-            if distance_to_go < MINIMAL_DISTANCE {
-                break;
-            }
-
-            distance_to_go = match self.cast_circle(current_pos, current_dir, RADIUS) {
-                None =>  {
-                    current_pos = current_pos + current_dir;
-                    0.0
-                },
-                Some((t, normal)) => {
-                    let contact_p = current_pos + current_dir * t;
-                    let pos_plus_normal = contact_p + 16.0 * normal;
-                    LineRasterizer::create(ctx)
-                        .from((contact_p.x as _, contact_p.y as _))
-                        .to((pos_plus_normal.x as _, pos_plus_normal.y as _))
-                        .rasterize(0b0110_0000);
-
-                    if t >= distance_to_go {
-                        current_pos = current_pos + current_dir;
-                        0.0
-                    } else {
-                        let direct_distance = t;
-                        let rest_distance = distance_to_go - direct_distance;
-                        let dir = current_dir * direct_distance;
-                        current_pos += dir;
-
-                        let dir_rest = current_dir * rest_distance;
-                        let norm_proj = normal.normalize_or_zero() *
-                            dir_rest.dot(normal.normalize_or_zero());
-
-                        current_dir = dir_rest - norm_proj;
-                        let d = current_dir.length();
-                        current_dir = current_dir / d;
-                        d
-                    }
-                }
-            }
-        }
-        self.pos = current_pos;
-    }
 }
 
 impl ContextHandler for App {
@@ -94,7 +45,6 @@ impl ContextHandler for App {
     }
 
     fn update(&mut self, ctx: &mut RetroBlitContext, dt: f32) {
-        ctx.clear(0);
         match (ctx.is_key_pressed(KeyCode::Left), ctx.is_key_pressed(KeyCode::Right)) {
             (true, false) => {
                 self.angle += TURN_SPEED * dt;
@@ -110,27 +60,25 @@ impl ContextHandler for App {
 
         match (ctx.is_key_pressed(KeyCode::Up), ctx.is_key_pressed(KeyCode::Down)) {
             (true, false) => {
-                self.move_towards(ctx, MOVEMENT_SPEED * dt * ray_dir);
+                self.move_towards(MOVEMENT_SPEED * dt * ray_dir);
             },
             (false, true) => {
-                self.move_towards(ctx, -MOVEMENT_SPEED * dt * ray_dir);
+                self.move_towards(-MOVEMENT_SPEED * dt * ray_dir);
             },
             _ => ()
         }
 
+        ctx.clear(0);
         self.draw_all_segments(ctx);
 
-        let current_pos = self.pos;
-        let current_dir = ray_dir;
-        let end_p = current_pos + current_dir * (RADIUS * 1.3);
-
         BresenhamCircleDrawer::create(ctx)
-            .with_position((current_pos.x as _, current_pos.y as _))
+            .with_position((self.pos.x as _, self.pos.y as _))
             .with_radius(RADIUS as _)
             .draw(255);
 
+        let end_p = self.pos + ray_dir * (RADIUS * 1.3);
         LineRasterizer::create(ctx)
-            .from((current_pos.x as _, current_pos.y as _))
+            .from((self.pos.x as _, self.pos.y as _))
             .to((end_p.x as _, end_p.y as _))
             .rasterize(255);
     }
@@ -153,15 +101,64 @@ impl App {
     ) -> Option<(f32, glam::Vec2)> {
         let mut t = None;
         for segment in self.segments.iter() {
-            match (t, SegmentCircleCastQuery::circle_cast_segment(
-                origin, p_dir, radius, *segment
-            )) {
+            match (
+                t,
+                SegmentCircleCastQuery::circle_cast_segment(
+                    origin,
+                    p_dir,
+                    radius + SKIN,
+                    *segment
+                )
+            ) {
                 (None, next) => t = next,
-                (Some((old_t, _)), Some((new_t, norm))) if new_t < old_t => t = Some((new_t, norm)),
+                (Some(
+                    (old_t, _)),
+                    Some((new_t, norm))
+                ) if new_t < old_t => t = Some((new_t, norm)),
                 _ => ()
             }
         }
-        t.map(|(t, normal)| (t - SKIN, normal))
+        t.map(|(t, normal)| (t - SKIN * 2.0, normal))
+    }
+
+    fn move_towards(&mut self, dir: glam::Vec2) {
+        let mut distance_to_go = dir.length();
+        let mut current_dir = dir.normalize_or_zero();
+        let mut current_pos = self.pos;
+
+        for _ in 0..MOVE_ITERATIONS {
+            if distance_to_go < MINIMAL_DISTANCE {
+                break;
+            }
+
+            distance_to_go = match self.cast_circle(current_pos, current_dir, RADIUS) {
+                None =>  {
+                    current_pos += current_dir * distance_to_go;
+                    0.0
+                },
+                Some((distance, _)) if distance >= distance_to_go =>  {
+                    current_pos += current_dir * distance_to_go;
+                    0.0
+                },
+                Some((direct_distance, normal)) => {
+                    let rest_distance = distance_to_go - direct_distance;
+                    current_pos += current_dir * direct_distance;
+
+                    current_dir = {
+                        let dir_rest = current_dir * rest_distance;
+                        let norm_proj = normal * dir_rest.dot(normal);
+                        dir_rest - norm_proj
+                    };
+
+                    let distance = current_dir.length();
+                    current_dir = current_dir.normalize_or_zero();
+
+                    distance
+                }
+            }
+        }
+
+        self.pos = current_pos;
     }
 }
 
