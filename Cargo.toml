@@ -9,7 +9,7 @@ description = "A library which lets you make games in a feel of old dos games wi
 [dependencies]
 thiserror = "1.0.31"
 orom-miniquad = { git = "https://github.com/madwareru/orom-miniquad", version = "0.4.1" }
-jfa-cpu = { git = "https://github.com/madwareru/jfa-cpu", version = "0.1.12" }
+jfa-cpu = { git = "https://github.com/madwareru/jfa-cpu", version = "0.2.0" }
 bin-serialization-rs = { git = "https://github.com/madwareru/bin-serialization-rs", version = "0.1.6" }
 lyon = "0.17.10"
 glam = "0.21.3"

@@ -1,4 +1,4 @@
-use jfa_cpu::MatrixJfa;
+use jfa_cpu::{MatrixJfa, Wrapping};
 use retro_blit::rendering::blittable::BufferProvider;
 
 const WANG_MASK_BYTES: &[u8] = include_bytes!("wang_mask.im256");
@@ -44,7 +44,8 @@ impl TerrainTiles {
                             } else {
                                 Some((i, j))
                             }
-                        })
+                        }),
+                    Wrapping::Clamp
                 );
                 wang_tiles.push(
                     jfa
@@ -88,7 +89,8 @@ impl TerrainTiles {
                             } else {
                                 Some((i, j))
                             }
-                        })
+                        }),
+                    Wrapping::Clamp
                 );
                 terrain_tiles.push(
                     jfa
@@ -141,7 +143,8 @@ impl TerrainTiles {
                     } else {
                         Some((i, j))
                     }
-                })
+                }),
+            Wrapping::Clamp
         );
         jfa_result
             .iter()

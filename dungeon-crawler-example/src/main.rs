@@ -184,14 +184,14 @@ impl App {
             };
 
             BlitBuilder::create(ctx, &sprite_sheet_with_color_key)
-                .with_source_subrect(hp_offset, 24, 24, 24)
+                .with_source_subrect(hp_offset, 96, 24, 24)
                 .with_dest_pos(68, 94)
                 .blit();
 
             if hp > 0 {
                 let hp_height = (24 * hp) / 100;
                 BlitBuilder::create(ctx, &sprite_sheet_with_color_key)
-                    .with_source_subrect(61, 76, 6, hp_height as usize)
+                    .with_source_subrect(96, 96, 6, hp_height as usize)
                     .with_dest_pos(59, 94 + 24 - hp_height as i16)
                     .blit();
             }
@@ -199,7 +199,7 @@ impl App {
             if mp > 0 {
                 let mp_height = (24 * mp) / 100;
                 BlitBuilder::create(ctx, &sprite_sheet_with_color_key)
-                    .with_source_subrect(69, 76, 6, mp_height as usize)
+                    .with_source_subrect(102, 96, 6, mp_height as usize)
                     .with_dest_pos(95, 94 + 24 - mp_height as i16)
                     .blit();
             }
@@ -302,15 +302,18 @@ impl App {
                         });
 
                         let water_pix = self.graphics.get_buffer()[
-                            (cell_remainder.0 * 24.0) as usize + 72 +
-                                self.graphics.get_width() * (48 + (cell_remainder.1 * 24.0) as usize)
+                            (cell_remainder.0 * 24.0) as usize +
+                                self.graphics.get_width() * (72 + (cell_remainder.1 * 24.0) as usize)
                             ];
 
                         let floor_pix = if self.flags.texture_terrain {
+                            // self.terrain_tex[(cell_remainder.0 * 24.0) as usize +
+                            //     24 * ((cell_remainder.1 * 24.0) as usize)
+                            // ]
                             self.graphics.get_buffer()[
                                 (cell_remainder.0 * 24.0) as usize + 24 +
-                                    self.graphics.get_width() * (48 + (cell_remainder.1 * 24.0) as usize)
-                                ]
+                                    self.graphics.get_width() * (72 + (cell_remainder.1 * 24.0) as usize)
+                            ]
                         } else {
                             17
                         };
@@ -518,13 +521,11 @@ impl App {
 
                     r##"Arrows: Movement
 Alt: Strafe
-Ctrl: Cast a magic
-Num keys 9, 0: just check out
+Num keys 0-9: just check out
 -/=: Tweak terrain quality
 F1: Toggle help
 Tab: Toggle map
-Esc: Quit game
-                    "##,
+Esc: Quit game"##,
                     Some(12)
                 );
             }

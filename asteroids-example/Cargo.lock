@@ -658,8 +658,8 @@ dependencies = [
 
 [[package]]
 name = "jfa-cpu"
-version = "0.1.12"
-source = "git+https://github.com/madwareru/jfa-cpu#45abb4dc594bbf7367200d16c0a9bc0aa2bc1083"
+version = "0.2.0"
+source = "git+https://github.com/madwareru/jfa-cpu#e6e2206c2c724b78fc81f0c1143f9cdffb3619d5"
 
 [[package]]
 name = "jni"

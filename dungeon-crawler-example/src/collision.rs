@@ -3,7 +3,7 @@ use retro_blit::math_utils::collision_queries::SegmentCircleCastQuery;
 use crate::{HeightMapEntry, MapData, Position, WangTerrain, WangTerrainEntry};
 
 const SKIN: f32 = 2.5;
-const RADIUS: f32 = 32.0;
+const RADIUS: f32 = 24.0;
 const MINIMAL_DISTANCE: f32 = 0.001;
 const MOVE_ITERATIONS: u8 = 8;
 
