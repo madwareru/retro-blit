@@ -5,6 +5,7 @@ use retro_blit::rendering::bresenham::{BresenhamCircleDrawer, LineRasterizer};
 use retro_blit::rendering::fonts::font_align::{HorizontalAlignment, VerticalAlignment};
 use retro_blit::rendering::fonts::tri_spaced::{Font, TextDrawer};
 use retro_blit::window::{ContextHandler, KeyCode, KeyMod, KeyMods, RetroBlitContext, ScrollDirection, ScrollKind, WindowMode};
+use crate::ai::Blackboard;
 use crate::collision::{CollisionTag, CollisionVec};
 use crate::components::{Angle, HP, Monster, MP, Player, Position, Potion, TerrainProp, TileInfo, WangHeightMapEntry, WangTerrain, WangTerrainEntry};
 use crate::map_data::{HeightMapEntry, MapData};
@@ -33,6 +34,7 @@ mod map_data;
 mod components;
 mod collision;
 mod utils;
+mod ai;
 
 pub enum AppOverlayState {
     Entry,
@@ -64,6 +66,7 @@ pub struct App {
     font: Font,
     overlay_state: AppOverlayState,
     noise_dither_lookup: Vec<f32>,
+    blackboard: Blackboard,
     world: World,
 }
 
@@ -111,6 +114,7 @@ impl App {
             font,
             overlay_state: AppOverlayState::Entry,
             noise_dither_lookup,
+            blackboard: Blackboard { player_position: Position { x: 0.0, y: 0.0 } },
             world,
         }
     }
@@ -892,6 +896,8 @@ impl ContextHandler for App {
     fn update(&mut self, ctx: &mut RetroBlitContext, dt: f32) {
         self.update_palette_scrolling(ctx, dt);
         self.update_input(ctx, dt);
+        self.update_blackboard();
+        self.update_ai(dt);
         self.render(ctx);
     }
 }
