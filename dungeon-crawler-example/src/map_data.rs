@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use retro_blit::rendering::blittable::BufferProvider;
-use crate::components::{Angle, HP, MP, Player, Position, WangHeightMapEntry, WangTerrain, WangTerrainEntry};
+use crate::ai::MobState;
+use crate::components::{Angle, DesiredVelocity, HP, MP, Player, Position, WangHeightMapEntry, WangTerrain, WangTerrainEntry};
 
 #[derive(Copy, Clone, PartialEq)]
 pub enum HeightMapEntry { Water, Floor, Wall }
@@ -158,7 +159,16 @@ impl MapData {
 
         for (&pos, &monster) in self.monsters.iter() {
             let position = Position { x: pos[0] as f32 * 64.0, y: pos[1] as f32 * 64.0 };
-            world.spawn((position, monster));
+            let desired_velocity = DesiredVelocity {
+                x: 0.0,
+                y: 0.0
+            };
+            world.spawn((
+                monster,
+                position,
+                desired_velocity,
+                MobState::Wandering { destination: position, time: 0.0 }
+            ));
         }
 
         let player_position = Position {

@@ -417,11 +417,10 @@ pub fn populate_collisions(
     }
 }
 
-fn cast_circle(
+pub fn cast_circle(
     collisions: &CollisionVec,
     origin: glam::Vec2,
     p_dir: glam::Vec2,
-    radius: f32,
     tag: CollisionTag
 ) -> Option<(f32, glam::Vec2)> {
     let mut t = None;
@@ -434,7 +433,7 @@ fn cast_circle(
             SegmentCircleCastQuery::circle_cast_segment(
                 origin,
                 p_dir,
-                radius + SKIN,
+                RADIUS + SKIN,
                 [
                     glam::vec2(collision.x0, collision.y0),
                     glam::vec2(collision.x1, collision.y1)
@@ -466,17 +465,8 @@ pub fn move_position_towards(
     let mut collision_vec = CollisionVec::new();
     let mut ii = (pos.x / 64.0) as usize;
     let mut jj = (pos.y / 64.0) as usize;
-    for j in (if jj > 0 {jj-1} else {jj}) ..= (if jj < MapData::WIDTH - 2 { jj + 1} else {jj}) {
-        for i in (if ii > 0 {ii-1} else {ii}) ..= (if ii < MapData::WIDTH - 2 { ii + 1} else {ii}) {
-            let idx = j * (MapData::WIDTH - 1) + i;
-            populate_collisions(
-                &mut collision_vec,
-                &terrain_tiles_data.tiles[idx],
-                i as f32 * 64.0,
-                j as f32 * 64.0
-            );
-        }
-    }
+
+    populate_collisions_data(&mut collision_vec, ii, jj, &terrain_tiles_data);
 
     for _ in 0..MOVE_ITERATIONS {
         if distance_to_go < MINIMAL_DISTANCE {
@@ -489,24 +479,14 @@ pub fn move_position_towards(
             collision_vec.clear();
             ii = new_ii;
             jj = new_jj;
-            for j in (if jj > 0 {jj-1} else {jj}) ..= (if jj < MapData::WIDTH - 2 { jj + 1} else {jj}) {
-                for i in (if ii > 0 {ii-1} else {ii}) ..= (if ii < MapData::WIDTH - 2 { ii + 1} else {ii}) {
-                    let idx = j * (MapData::WIDTH - 1) + i;
-                    populate_collisions(
-                        &mut collision_vec,
-                        &terrain_tiles_data.tiles[idx],
-                        i as f32 * 64.0,
-                        j as f32 * 64.0
-                    );
-                }
-            }
+
+            populate_collisions_data(&mut collision_vec, ii, jj, &terrain_tiles_data);
         }
 
         distance_to_go = match cast_circle(
             &collision_vec,
             current_pos,
             current_dir,
-            RADIUS,
             collision_tag
         ) {
             None =>  {
@@ -538,5 +518,37 @@ pub fn move_position_towards(
     Position {
         x: current_pos.x,
         y: current_pos.y
+    }
+}
+
+pub fn populate_collisions_data_from_position(
+    collision_vec: &mut SmallVec<[CollisionRegion; 18]>,
+    x: f32,
+    y: f32,
+    terrain_tiles_data: &WangTerrain
+) {
+    populate_collisions_data(
+        collision_vec,
+        (x / 64.0) as usize, (y / 64.0) as usize,
+        terrain_tiles_data
+    );
+}
+
+fn populate_collisions_data(
+    collision_vec: &mut SmallVec<[CollisionRegion; 18]>,
+    ii: usize,
+    jj: usize,
+    terrain_tiles_data: &WangTerrain
+) {
+    for j in (if jj > 0 { jj - 1 } else { jj })..=(if jj < MapData::WIDTH - 2 { jj + 1 } else { jj }) {
+        for i in (if ii > 0 { ii - 1 } else { ii })..=(if ii < MapData::WIDTH - 2 { ii + 1 } else { ii }) {
+            let idx = j * (MapData::WIDTH - 1) + i;
+            populate_collisions(
+                collision_vec,
+                &terrain_tiles_data.tiles[idx],
+                i as f32 * 64.0,
+                j as f32 * 64.0
+            );
+        }
     }
 }

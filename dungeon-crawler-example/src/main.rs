@@ -606,12 +606,14 @@ Esc: Quit game"##,
         let start_y;
         let angle;
 
+        const DENOMINATOR: f32 = 32.0;
+
         if let Some((_, data)) = self.world.query::<(&Player, &Position, &Angle)>().iter().next() {
             let (_, &Position { x, y }, &Angle(a)) = data;
 
             angle = a.to_radians();
 
-            let (remapped_x, remapped_y) = (x / 16.0, y / 16.0);
+            let (remapped_x, remapped_y) = (x / DENOMINATOR, y / DENOMINATOR);
             start_x = -(remapped_x as i32);
             start_y = -(remapped_y as i32);
         } else {
@@ -637,12 +639,12 @@ Esc: Quit game"##,
                     );
                     for collision in collision_vec.iter() {
                         let p0 = (
-                            80 + start_x as i16 + (collision.x0 / 16.0) as i16,
-                            48 + start_y as i16 + (collision.y0 / 16.0) as i16
+                            80 + start_x as i16 + (collision.x0 / DENOMINATOR) as i16,
+                            48 + start_y as i16 + (collision.y0 / DENOMINATOR) as i16
                         );
                         let p1 = (
-                            80 + start_x as i16 + (collision.x1 / 16.0) as i16,
-                            48 + start_y as i16 + (collision.y1 / 16.0) as i16
+                            80 + start_x as i16 + (collision.x1 / DENOMINATOR) as i16,
+                            48 + start_y as i16 + (collision.y1 / DENOMINATOR) as i16
                         );
                         LineRasterizer::create(ctx)
                             .from(p0)
@@ -656,10 +658,10 @@ Esc: Quit game"##,
 
                     BresenhamCircleDrawer::create(ctx)
                         .with_position((80, 48))
-                        .with_radius(4)
+                        .with_radius(2)
                         .draw(12);
 
-                    let view_vec = (6.0 * angle.sin(), -6.0 * angle.cos());
+                    let view_vec = (4.0 * angle.sin(), -4.0 * angle.cos());
 
                     LineRasterizer::create(ctx)
                         .from((80, 48))

@@ -18,3 +18,11 @@ pub fn lerp(a: f32, b: f32, t: f32) -> f32 {
 pub fn dot(a: (f32, f32), b: (f32, f32)) -> f32 {
     a.0 * b.0 + a.1 * b.1
 }
+
+const GOLDEN_RATIO_CONST: f32 = 2.2360679775;
+
+pub fn get_point_on_golden_ratio_disk(t: f32) -> (f32, f32) {
+    let r = t.sqrt();
+    let theta = std::f32::consts::PI * (1.0 + GOLDEN_RATIO_CONST) * t;
+    (r * theta.cos(), r * theta.sin())
+}

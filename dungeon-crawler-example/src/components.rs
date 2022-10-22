@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use glam::{Vec2, vec2};
 
 #[derive(Copy, Clone)]
 pub struct Player;
@@ -18,6 +19,17 @@ pub enum Monster {
     Kobold,
     Rat,
     Skeleton
+}
+
+impl Monster {
+    pub(crate) fn speed(&self) -> f32 {
+        match self {
+            Monster::Toad => 24.0,
+            Monster::Kobold => 36.0,
+            Monster::Rat => 48.0,
+            Monster::Skeleton => 18.0
+        }
+    }
 }
 
 #[derive(Copy, Clone)]
@@ -58,6 +70,17 @@ pub struct WangTerrainEntry {
 #[derive(Copy, Clone, PartialEq)]
 pub struct Position {
     pub x: f32, pub y: f32,
+}
+
+#[derive(Copy, Clone, PartialEq)]
+pub struct DesiredVelocity {
+    pub x: f32, pub y: f32,
+}
+
+impl Into<Vec2> for Position {
+    fn into(self) -> Vec2 {
+        vec2(self.x, self.y)
+    }
 }
 
 pub struct WangTerrain {
