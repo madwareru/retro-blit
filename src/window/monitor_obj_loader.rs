@@ -135,6 +135,8 @@ impl From<[f32; 3]> for Vec4 {
         }
     }
 }
+unsafe impl bytemuck::Zeroable for Vec4{}
+unsafe impl bytemuck::Pod for Vec4{}
 
 #[derive(Debug, Copy, Clone)]
 #[repr(C)]
@@ -150,6 +152,8 @@ impl From<[f32; 2]> for Vec2 {
         }
     }
 }
+unsafe impl bytemuck::Zeroable for Vec2{}
+unsafe impl bytemuck::Pod for Vec2{}
 
 #[derive(Debug, Copy, Clone)]
 #[repr(C)]
@@ -157,6 +161,8 @@ pub struct Vertex {
     pub position: Vec4,
     pub uv: Vec2
 }
+unsafe impl bytemuck::Zeroable for Vertex{}
+unsafe impl bytemuck::Pod for Vertex{}
 
 #[derive(Debug, Clone)]
 pub struct Mesh {

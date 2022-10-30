@@ -1,6 +1,6 @@
 use glam::{vec2};
 use rand::{Rng, thread_rng};
-use crate::{App, CollisionTag, Monster, Player, Position, WangTerrain};
+use crate::{App, CollisionTag, Monster, Player, Position};
 use crate::components::DesiredVelocity;
 
 pub struct Blackboard {
@@ -48,12 +48,6 @@ impl App {
     pub(crate) fn update_blackboard(&mut self) {
         if let Some((_, (_, position))) = self.world.query::<(&Player, &Position)>().iter().next() {
             self.blackboard.player_position = *position;
-        }
-    }
-
-    fn with_wang_data(&self, mut foo: impl FnMut(&WangTerrain)) {
-        if let Some((_, (wang_data,))) = self.world.query::<(&WangTerrain,)>().iter().next() {
-            foo(wang_data)
         }
     }
 

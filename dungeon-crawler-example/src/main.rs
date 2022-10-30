@@ -241,7 +241,8 @@ impl App {
             return;
         }
 
-        if let Some((_, (wang_terrain, ))) = self.world.query::<(&mut WangTerrain, )>().iter().next() {
+        let mut depth_buffer = std::mem::take(&mut self.depth_buffer);
+        self.with_wang_data_mut(|wang_terrain| {
             for i in 0..160 {
                 let t = i as f32 / 159.0;
                 let uv_up = (
@@ -317,7 +318,7 @@ impl App {
                             self.graphics.get_buffer()[
                                 (cell_remainder.0 * 24.0) as usize + 24 +
                                     self.graphics.get_width() * (72 + (cell_remainder.1 * 24.0) as usize)
-                            ]
+                                ]
                         } else {
                             17
                         };
@@ -376,10 +377,10 @@ impl App {
                                     terrain_bottom,
                                     if terrain_bottom < 0.3 { 0.4} else {0.75},
                                     self.terrain_tiles.sample_tile(
-                                    TileInfo::Stalagmite,
-                                    dual_cell_remainder.0,
-                                    dual_cell_remainder.1,
-                                ));
+                                        TileInfo::Stalagmite,
+                                        dual_cell_remainder.0,
+                                        dual_cell_remainder.1,
+                                    ));
                             }
                         }
 
@@ -444,8 +445,8 @@ impl App {
                                 if h > max_h {
                                     for _ in max_h..h {
                                         let idx = i + 160 * bottom_pix;
-                                        if self.depth_buffer[idx] > t {
-                                            self.depth_buffer[idx] = t;
+                                        if depth_buffer[idx] > t {
+                                            depth_buffer[idx] = t;
                                             ctx.get_buffer_mut()[idx] = floor_pix;
                                         }
                                         if bottom_pix > 0 { bottom_pix -= 1; }
@@ -460,8 +461,8 @@ impl App {
                                 if h > max_h {
                                     for _ in max_h..h {
                                         let idx = i + 160 * bottom_pix;
-                                        if self.depth_buffer[idx] > t {
-                                            self.depth_buffer[idx] = t;
+                                        if depth_buffer[idx] > t {
+                                            depth_buffer[idx] = t;
                                             ctx.get_buffer_mut()[idx] = water_pix;
                                         }
                                         if bottom_pix > 0 { bottom_pix -= 1; }
@@ -479,8 +480,8 @@ impl App {
                             if h < max_h_top {
                                 for _ in h..max_h_top {
                                     let idx = i + 160 * bottom_pix_top;
-                                    if self.depth_buffer[idx] > t {
-                                        self.depth_buffer[idx] = t;
+                                    if depth_buffer[idx] > t {
+                                        depth_buffer[idx] = t;
                                         ctx.get_buffer_mut()[idx] = floor_pix;
                                     }
                                     bottom_pix_top += 1;
@@ -492,7 +493,8 @@ impl App {
                     t += delta_t;
                 }
             }
-        }
+        });
+        self.depth_buffer = depth_buffer;
     }
 
     #[inline(always)]
@@ -577,14 +579,14 @@ Esc: Quit game"##,
             let speed_x = movement_speed * s - strafe_speed * c;
             let speed_y = - movement_speed * c - strafe_speed * s;
 
-            if let Some((_, (wang_data,))) = self.world.query::<(&WangTerrain,)>().iter().next() {
+            self.with_wang_data(|wang_data| {
                 *pos = collision::move_position_towards(
                     *pos,
                     glam::vec2(speed_x, speed_y),
                     CollisionTag::All,
                     wang_data
                 );
-            }
+            });
         }
     }
 
@@ -622,7 +624,7 @@ Esc: Quit game"##,
 
         let mut collision_vec = CollisionVec::new();
 
-        if let Some((_, (wang_terrain, ))) = self.world.query::<(&WangTerrain, )>().iter().next() {
+        self.with_wang_data(|wang_terrain| {
             for j in 0..MapData::HEIGHT-1 {
                 for i in 0..MapData::WIDTH-1 {
                     let idx = j * (MapData::WIDTH-1) + i;
@@ -669,7 +671,7 @@ Esc: Quit game"##,
                         .rasterize(12);
                 }
             }
-        }
+        });
     }
 
     fn render_objects(&mut self, ctx: &mut RetroBlitContext) {
@@ -773,6 +775,18 @@ Esc: Quit game"##,
                     }
                 }
             }
+        }
+    }
+
+    pub(crate) fn with_wang_data(&self, mut foo: impl FnMut(&WangTerrain)) {
+        if let Some((_, (wang_data,))) = self.world.query::<(&WangTerrain,)>().iter().next() {
+            foo(wang_data)
+        }
+    }
+
+    pub(crate) fn with_wang_data_mut(&self, mut foo: impl FnMut(&mut WangTerrain)) {
+        if let Some((_, (wang_data,))) = self.world.query::<(&mut WangTerrain,)>().iter().next() {
+            foo(wang_data)
         }
     }
 }

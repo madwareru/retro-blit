@@ -1,7 +1,8 @@
 use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::time::Instant;
-use orom_miniquad::*;
+use gl_pipelines::*;
+use gl_pipelines::window::{EventHandler, MouseButton, ParametrizedEventHandler, WindowContext};
 
 pub mod monitor_obj_loader;
 use monitor_obj_loader::Vec4;
@@ -150,132 +151,127 @@ pub struct KeyMods {
     pub command: bool,
 }
 
-impl TryFrom<orom_miniquad::KeyCode> for KeyCode {
+impl TryFrom<gl_pipelines::window::KeyCode> for KeyCode {
     type Error = ();
 
-    fn try_from(value: orom_miniquad::KeyCode) -> Result<Self, Self::Error> {
+    fn try_from(value: gl_pipelines::window::KeyCode) -> Result<Self, Self::Error> {
         match value {
-            orom_miniquad::KeyCode::A => Ok(KeyCode::A),
-            orom_miniquad::KeyCode::B => Ok(KeyCode::B),
-            orom_miniquad::KeyCode::C => Ok(KeyCode::C),
-            orom_miniquad::KeyCode::D => Ok(KeyCode::D),
-            orom_miniquad::KeyCode::E => Ok(KeyCode::E),
-            orom_miniquad::KeyCode::F => Ok(KeyCode::F),
-            orom_miniquad::KeyCode::G => Ok(KeyCode::G),
-            orom_miniquad::KeyCode::H => Ok(KeyCode::H),
-            orom_miniquad::KeyCode::I => Ok(KeyCode::I),
-            orom_miniquad::KeyCode::J => Ok(KeyCode::J),
-            orom_miniquad::KeyCode::K => Ok(KeyCode::K),
-            orom_miniquad::KeyCode::L => Ok(KeyCode::L),
-            orom_miniquad::KeyCode::M => Ok(KeyCode::M),
-            orom_miniquad::KeyCode::N => Ok(KeyCode::N),
-            orom_miniquad::KeyCode::O => Ok(KeyCode::O),
-            orom_miniquad::KeyCode::P => Ok(KeyCode::P),
-            orom_miniquad::KeyCode::Q => Ok(KeyCode::Q),
-            orom_miniquad::KeyCode::R => Ok(KeyCode::R),
-            orom_miniquad::KeyCode::S => Ok(KeyCode::S),
-            orom_miniquad::KeyCode::T => Ok(KeyCode::T),
-            orom_miniquad::KeyCode::U => Ok(KeyCode::U),
-            orom_miniquad::KeyCode::V => Ok(KeyCode::V),
-            orom_miniquad::KeyCode::W => Ok(KeyCode::W),
-            orom_miniquad::KeyCode::X => Ok(KeyCode::X),
-            orom_miniquad::KeyCode::Y => Ok(KeyCode::Y),
-            orom_miniquad::KeyCode::Z => Ok(KeyCode::Z),
-            orom_miniquad::KeyCode::Space => Ok(KeyCode::Space),
-            orom_miniquad::KeyCode::Apostrophe => Ok(KeyCode::Apostrophe),
-            orom_miniquad::KeyCode::Comma => Ok(KeyCode::Comma),
-            orom_miniquad::KeyCode::Minus => Ok(KeyCode::Minus),
-            orom_miniquad::KeyCode::Period => Ok(KeyCode::Period),
-            orom_miniquad::KeyCode::Slash => Ok(KeyCode::Slash),
-            orom_miniquad::KeyCode::Key0 => Ok(KeyCode::Key0),
-            orom_miniquad::KeyCode::Key1 => Ok(KeyCode::Key1),
-            orom_miniquad::KeyCode::Key2 => Ok(KeyCode::Key2),
-            orom_miniquad::KeyCode::Key3 => Ok(KeyCode::Key3),
-            orom_miniquad::KeyCode::Key4 => Ok(KeyCode::Key4),
-            orom_miniquad::KeyCode::Key5 => Ok(KeyCode::Key5),
-            orom_miniquad::KeyCode::Key6 => Ok(KeyCode::Key6),
-            orom_miniquad::KeyCode::Key7 => Ok(KeyCode::Key7),
-            orom_miniquad::KeyCode::Key8 => Ok(KeyCode::Key8),
-            orom_miniquad::KeyCode::Key9 => Ok(KeyCode::Key9),
-            orom_miniquad::KeyCode::Semicolon => Ok(KeyCode::Semicolon),
-            orom_miniquad::KeyCode::Equal => Ok(KeyCode::Equal),
-            orom_miniquad::KeyCode::LeftBracket => Ok(KeyCode::LeftBracket),
-            orom_miniquad::KeyCode::Backslash => Ok(KeyCode::Backslash),
-            orom_miniquad::KeyCode::RightBracket => Ok(KeyCode::RightBracket),
-            orom_miniquad::KeyCode::GraveAccent => Ok(KeyCode::GraveAccent),
-            orom_miniquad::KeyCode::World1 => Ok(KeyCode::World1),
-            orom_miniquad::KeyCode::World2 => Ok(KeyCode::World2),
-            orom_miniquad::KeyCode::Escape => Ok(KeyCode::Escape),
-            orom_miniquad::KeyCode::Enter => Ok(KeyCode::Enter),
-            orom_miniquad::KeyCode::Tab => Ok(KeyCode::Tab),
-            orom_miniquad::KeyCode::Backspace => Ok(KeyCode::Backspace),
-            orom_miniquad::KeyCode::Insert => Ok(KeyCode::Insert),
-            orom_miniquad::KeyCode::Delete => Ok(KeyCode::Delete),
-            orom_miniquad::KeyCode::Right => Ok(KeyCode::Right),
-            orom_miniquad::KeyCode::Left => Ok(KeyCode::Left),
-            orom_miniquad::KeyCode::Down => Ok(KeyCode::Down),
-            orom_miniquad::KeyCode::Up => Ok(KeyCode::Up),
-            orom_miniquad::KeyCode::PageUp => Ok(KeyCode::PageUp),
-            orom_miniquad::KeyCode::PageDown => Ok(KeyCode::PageDown),
-            orom_miniquad::KeyCode::Home => Ok(KeyCode::Home),
-            orom_miniquad::KeyCode::End => Ok(KeyCode::End),
-            orom_miniquad::KeyCode::CapsLock => Ok(KeyCode::CapsLock),
-            orom_miniquad::KeyCode::ScrollLock => Ok(KeyCode::ScrollLock),
-            orom_miniquad::KeyCode::NumLock => Ok(KeyCode::NumLock),
-            orom_miniquad::KeyCode::PrintScreen => Ok(KeyCode::PrintScreen),
-            orom_miniquad::KeyCode::Pause => Ok(KeyCode::Pause),
-            orom_miniquad::KeyCode::F1 => Ok(KeyCode::F1),
-            orom_miniquad::KeyCode::F2 => Ok(KeyCode::F2),
-            orom_miniquad::KeyCode::F3 => Ok(KeyCode::F3),
-            orom_miniquad::KeyCode::F4 => Ok(KeyCode::F4),
-            orom_miniquad::KeyCode::F5 => Ok(KeyCode::F5),
-            orom_miniquad::KeyCode::F6 => Ok(KeyCode::F6),
-            orom_miniquad::KeyCode::F7 => Ok(KeyCode::F7),
-            orom_miniquad::KeyCode::F8 => Ok(KeyCode::F8),
-            orom_miniquad::KeyCode::F9 => Ok(KeyCode::F9),
-            orom_miniquad::KeyCode::F10 => Ok(KeyCode::F10),
-            orom_miniquad::KeyCode::F11 => Ok(KeyCode::F11),
-            orom_miniquad::KeyCode::F12 => Ok(KeyCode::F12),
-            orom_miniquad::KeyCode::F13 => Ok(KeyCode::F13),
-            orom_miniquad::KeyCode::F14 => Ok(KeyCode::F14),
-            orom_miniquad::KeyCode::F15 => Ok(KeyCode::F15),
-            orom_miniquad::KeyCode::F16 => Ok(KeyCode::F16),
-            orom_miniquad::KeyCode::F17 => Ok(KeyCode::F17),
-            orom_miniquad::KeyCode::F18 => Ok(KeyCode::F18),
-            orom_miniquad::KeyCode::F19 => Ok(KeyCode::F19),
-            orom_miniquad::KeyCode::F20 => Ok(KeyCode::F20),
-            orom_miniquad::KeyCode::F21 => Ok(KeyCode::F21),
-            orom_miniquad::KeyCode::F22 => Ok(KeyCode::F22),
-            orom_miniquad::KeyCode::F23 => Ok(KeyCode::F23),
-            orom_miniquad::KeyCode::F24 => Ok(KeyCode::F24),
-            orom_miniquad::KeyCode::F25 => Ok(KeyCode::F25),
-            orom_miniquad::KeyCode::Kp0 => Ok(KeyCode::Kp0),
-            orom_miniquad::KeyCode::Kp1 => Ok(KeyCode::Kp1),
-            orom_miniquad::KeyCode::Kp2 => Ok(KeyCode::Kp2),
-            orom_miniquad::KeyCode::Kp3 => Ok(KeyCode::Kp3),
-            orom_miniquad::KeyCode::Kp4 => Ok(KeyCode::Kp4),
-            orom_miniquad::KeyCode::Kp5 => Ok(KeyCode::Kp5),
-            orom_miniquad::KeyCode::Kp6 => Ok(KeyCode::Kp6),
-            orom_miniquad::KeyCode::Kp7 => Ok(KeyCode::Kp7),
-            orom_miniquad::KeyCode::Kp8 => Ok(KeyCode::Kp8),
-            orom_miniquad::KeyCode::Kp9 => Ok(KeyCode::Kp9),
-            orom_miniquad::KeyCode::KpDecimal => Ok(KeyCode::KpDecimal),
-            orom_miniquad::KeyCode::KpDivide => Ok(KeyCode::KpDivide),
-            orom_miniquad::KeyCode::KpMultiply => Ok(KeyCode::KpMultiply),
-            orom_miniquad::KeyCode::KpSubtract => Ok(KeyCode::KpSubtract),
-            orom_miniquad::KeyCode::KpAdd => Ok(KeyCode::KpAdd),
-            orom_miniquad::KeyCode::KpEnter => Ok(KeyCode::KpEnter),
-            orom_miniquad::KeyCode::KpEqual => Ok(KeyCode::KpEqual),
-            orom_miniquad::KeyCode::LeftShift => Ok(KeyCode::LeftShift),
-            orom_miniquad::KeyCode::LeftControl => Ok(KeyCode::LeftControl),
-            orom_miniquad::KeyCode::LeftAlt => Ok(KeyCode::LeftAlt),
-            orom_miniquad::KeyCode::LeftSuper => Ok(KeyCode::LeftSuper),
-            orom_miniquad::KeyCode::RightShift => Ok(KeyCode::RightShift),
-            orom_miniquad::KeyCode::RightControl => Ok(KeyCode::RightControl),
-            orom_miniquad::KeyCode::RightAlt => Ok(KeyCode::RightAlt),
-            orom_miniquad::KeyCode::RightSuper => Ok(KeyCode::RightSuper),
-            orom_miniquad::KeyCode::Menu => Ok(KeyCode::Menu),
-            orom_miniquad::KeyCode::Unknown => Err(()),
+            gl_pipelines::window::KeyCode::A => Ok(KeyCode::A),
+            gl_pipelines::window::KeyCode::B => Ok(KeyCode::B),
+            gl_pipelines::window::KeyCode::C => Ok(KeyCode::C),
+            gl_pipelines::window::KeyCode::D => Ok(KeyCode::D),
+            gl_pipelines::window::KeyCode::E => Ok(KeyCode::E),
+            gl_pipelines::window::KeyCode::F => Ok(KeyCode::F),
+            gl_pipelines::window::KeyCode::G => Ok(KeyCode::G),
+            gl_pipelines::window::KeyCode::H => Ok(KeyCode::H),
+            gl_pipelines::window::KeyCode::I => Ok(KeyCode::I),
+            gl_pipelines::window::KeyCode::J => Ok(KeyCode::J),
+            gl_pipelines::window::KeyCode::K => Ok(KeyCode::K),
+            gl_pipelines::window::KeyCode::L => Ok(KeyCode::L),
+            gl_pipelines::window::KeyCode::M => Ok(KeyCode::M),
+            gl_pipelines::window::KeyCode::N => Ok(KeyCode::N),
+            gl_pipelines::window::KeyCode::O => Ok(KeyCode::O),
+            gl_pipelines::window::KeyCode::P => Ok(KeyCode::P),
+            gl_pipelines::window::KeyCode::Q => Ok(KeyCode::Q),
+            gl_pipelines::window::KeyCode::R => Ok(KeyCode::R),
+            gl_pipelines::window::KeyCode::S => Ok(KeyCode::S),
+            gl_pipelines::window::KeyCode::T => Ok(KeyCode::T),
+            gl_pipelines::window::KeyCode::U => Ok(KeyCode::U),
+            gl_pipelines::window::KeyCode::V => Ok(KeyCode::V),
+            gl_pipelines::window::KeyCode::W => Ok(KeyCode::W),
+            gl_pipelines::window::KeyCode::X => Ok(KeyCode::X),
+            gl_pipelines::window::KeyCode::Y => Ok(KeyCode::Y),
+            gl_pipelines::window::KeyCode::Z => Ok(KeyCode::Z),
+            gl_pipelines::window::KeyCode::Space => Ok(KeyCode::Space),
+            gl_pipelines::window::KeyCode::Comma => Ok(KeyCode::Comma),
+            gl_pipelines::window::KeyCode::Minus => Ok(KeyCode::Minus),
+            gl_pipelines::window::KeyCode::Period => Ok(KeyCode::Period),
+            gl_pipelines::window::KeyCode::Slash => Ok(KeyCode::Slash),
+            gl_pipelines::window::KeyCode::Num0 => Ok(KeyCode::Key0),
+            gl_pipelines::window::KeyCode::Num1 => Ok(KeyCode::Key1),
+            gl_pipelines::window::KeyCode::Num2 => Ok(KeyCode::Key2),
+            gl_pipelines::window::KeyCode::Num3 => Ok(KeyCode::Key3),
+            gl_pipelines::window::KeyCode::Num4 => Ok(KeyCode::Key4),
+            gl_pipelines::window::KeyCode::Num5 => Ok(KeyCode::Key5),
+            gl_pipelines::window::KeyCode::Num6 => Ok(KeyCode::Key6),
+            gl_pipelines::window::KeyCode::Num7 => Ok(KeyCode::Key7),
+            gl_pipelines::window::KeyCode::Num8 => Ok(KeyCode::Key8),
+            gl_pipelines::window::KeyCode::Num9 => Ok(KeyCode::Key9),
+            gl_pipelines::window::KeyCode::Semicolon => Ok(KeyCode::Semicolon),
+            gl_pipelines::window::KeyCode::Equals => Ok(KeyCode::Equal),
+            gl_pipelines::window::KeyCode::LeftBracket => Ok(KeyCode::LeftBracket),
+            gl_pipelines::window::KeyCode::Backslash => Ok(KeyCode::Backslash),
+            gl_pipelines::window::KeyCode::RightBracket => Ok(KeyCode::RightBracket),
+            gl_pipelines::window::KeyCode::Escape => Ok(KeyCode::Escape),
+            gl_pipelines::window::KeyCode::Return => Ok(KeyCode::Enter),
+            gl_pipelines::window::KeyCode::Tab => Ok(KeyCode::Tab),
+            gl_pipelines::window::KeyCode::Backspace => Ok(KeyCode::Backspace),
+            gl_pipelines::window::KeyCode::Insert => Ok(KeyCode::Insert),
+            gl_pipelines::window::KeyCode::Delete => Ok(KeyCode::Delete),
+            gl_pipelines::window::KeyCode::Right => Ok(KeyCode::Right),
+            gl_pipelines::window::KeyCode::Left => Ok(KeyCode::Left),
+            gl_pipelines::window::KeyCode::Down => Ok(KeyCode::Down),
+            gl_pipelines::window::KeyCode::Up => Ok(KeyCode::Up),
+            gl_pipelines::window::KeyCode::PageUp => Ok(KeyCode::PageUp),
+            gl_pipelines::window::KeyCode::PageDown => Ok(KeyCode::PageDown),
+            gl_pipelines::window::KeyCode::Home => Ok(KeyCode::Home),
+            gl_pipelines::window::KeyCode::End => Ok(KeyCode::End),
+            gl_pipelines::window::KeyCode::CapsLock => Ok(KeyCode::CapsLock),
+            gl_pipelines::window::KeyCode::ScrollLock => Ok(KeyCode::ScrollLock),
+            gl_pipelines::window::KeyCode::NumLockClear => Ok(KeyCode::NumLock),
+            gl_pipelines::window::KeyCode::PrintScreen => Ok(KeyCode::PrintScreen),
+            gl_pipelines::window::KeyCode::Pause => Ok(KeyCode::Pause),
+            gl_pipelines::window::KeyCode::F1 => Ok(KeyCode::F1),
+            gl_pipelines::window::KeyCode::F2 => Ok(KeyCode::F2),
+            gl_pipelines::window::KeyCode::F3 => Ok(KeyCode::F3),
+            gl_pipelines::window::KeyCode::F4 => Ok(KeyCode::F4),
+            gl_pipelines::window::KeyCode::F5 => Ok(KeyCode::F5),
+            gl_pipelines::window::KeyCode::F6 => Ok(KeyCode::F6),
+            gl_pipelines::window::KeyCode::F7 => Ok(KeyCode::F7),
+            gl_pipelines::window::KeyCode::F8 => Ok(KeyCode::F8),
+            gl_pipelines::window::KeyCode::F9 => Ok(KeyCode::F9),
+            gl_pipelines::window::KeyCode::F10 => Ok(KeyCode::F10),
+            gl_pipelines::window::KeyCode::F11 => Ok(KeyCode::F11),
+            gl_pipelines::window::KeyCode::F12 => Ok(KeyCode::F12),
+            gl_pipelines::window::KeyCode::F13 => Ok(KeyCode::F13),
+            gl_pipelines::window::KeyCode::F14 => Ok(KeyCode::F14),
+            gl_pipelines::window::KeyCode::F15 => Ok(KeyCode::F15),
+            gl_pipelines::window::KeyCode::F16 => Ok(KeyCode::F16),
+            gl_pipelines::window::KeyCode::F17 => Ok(KeyCode::F17),
+            gl_pipelines::window::KeyCode::F18 => Ok(KeyCode::F18),
+            gl_pipelines::window::KeyCode::F19 => Ok(KeyCode::F19),
+            gl_pipelines::window::KeyCode::F20 => Ok(KeyCode::F20),
+            gl_pipelines::window::KeyCode::F21 => Ok(KeyCode::F21),
+            gl_pipelines::window::KeyCode::F22 => Ok(KeyCode::F22),
+            gl_pipelines::window::KeyCode::F23 => Ok(KeyCode::F23),
+            gl_pipelines::window::KeyCode::F24 => Ok(KeyCode::F24),
+            gl_pipelines::window::KeyCode::Kp0 => Ok(KeyCode::Kp0),
+            gl_pipelines::window::KeyCode::Kp1 => Ok(KeyCode::Kp1),
+            gl_pipelines::window::KeyCode::Kp2 => Ok(KeyCode::Kp2),
+            gl_pipelines::window::KeyCode::Kp3 => Ok(KeyCode::Kp3),
+            gl_pipelines::window::KeyCode::Kp4 => Ok(KeyCode::Kp4),
+            gl_pipelines::window::KeyCode::Kp5 => Ok(KeyCode::Kp5),
+            gl_pipelines::window::KeyCode::Kp6 => Ok(KeyCode::Kp6),
+            gl_pipelines::window::KeyCode::Kp7 => Ok(KeyCode::Kp7),
+            gl_pipelines::window::KeyCode::Kp8 => Ok(KeyCode::Kp8),
+            gl_pipelines::window::KeyCode::Kp9 => Ok(KeyCode::Kp9),
+            gl_pipelines::window::KeyCode::KpDecimal => Ok(KeyCode::KpDecimal),
+            gl_pipelines::window::KeyCode::KpDivide => Ok(KeyCode::KpDivide),
+            gl_pipelines::window::KeyCode::KpMultiply => Ok(KeyCode::KpMultiply),
+            gl_pipelines::window::KeyCode::KpMemSubtract => Ok(KeyCode::KpSubtract),
+            gl_pipelines::window::KeyCode::KpMemAdd => Ok(KeyCode::KpAdd),
+            gl_pipelines::window::KeyCode::KpEnter => Ok(KeyCode::KpEnter),
+            gl_pipelines::window::KeyCode::KpEquals => Ok(KeyCode::KpEqual),
+            gl_pipelines::window::KeyCode::LShift => Ok(KeyCode::LeftShift),
+            gl_pipelines::window::KeyCode::LCtrl => Ok(KeyCode::LeftControl),
+            gl_pipelines::window::KeyCode::LAlt => Ok(KeyCode::LeftAlt),
+            gl_pipelines::window::KeyCode::LGui => Ok(KeyCode::LeftSuper),
+            gl_pipelines::window::KeyCode::RShift => Ok(KeyCode::RightShift),
+            gl_pipelines::window::KeyCode::RCtrl => Ok(KeyCode::RightControl),
+            gl_pipelines::window::KeyCode::RAlt => Ok(KeyCode::RightAlt),
+            gl_pipelines::window::KeyCode::RGui => Ok(KeyCode::RightSuper),
+            gl_pipelines::window::KeyCode::Menu => Ok(KeyCode::Menu),
+            _ => Err(()),
         }
     }
 }
@@ -449,8 +445,8 @@ pub struct Stage<CtxHandler: ContextHandler> {
     last_instant: Instant
 }
 
-impl<CtxHandler: ContextHandler> Stage<CtxHandler> {
-    pub fn new(ctx: &mut Context, handler: CtxHandler) -> Stage<CtxHandler> {
+impl<CtxHandler: ContextHandler> ParametrizedEventHandler<CtxHandler> for Stage<CtxHandler> {
+    fn make(ctx: &mut Context, _win_ctx: &mut WindowContext, handler: CtxHandler) -> Self {
         let (mask_mesh, screen_mesh) = match handler.get_window_mode() {
             WindowMode::ModeX | WindowMode::Mode13 => {
                 // it's okay to crash here since we can't do anything useful without monitor models
@@ -573,12 +569,12 @@ impl<CtxHandler: ContextHandler> Stage<CtxHandler> {
         let screen_binding = Bindings {
             vertex_buffers: vec![screen_vertex_buffer.clone()],
             index_buffer: screen_index_buffer.clone(),
-            images: vec![render_target_tex]
+            images: vec![render_target_tex.clone()]
         };
 
         let offscreen_pass = RenderPass::new(
             ctx,
-            render_target_tex,
+            render_target_tex.clone(),
             None
         );
 
@@ -659,7 +655,7 @@ impl<CtxHandler: ContextHandler> Stage<CtxHandler> {
         let offscreen_binding = Bindings {
             vertex_buffers: vec![vertex_buffer.clone()],
             index_buffer: index_buffer.clone(),
-            images: vec![colors_texture, buffer_texture]
+            images: vec![colors_texture.clone(), buffer_texture.clone()]
         };
 
         let shader = Shader::new(
@@ -752,17 +748,17 @@ impl<CtxHandler: ContextHandler> Stage<CtxHandler> {
             offscreen_pass,
             context_data,
             handler,
-            buffer_texture,
-            colors_texture,
+            buffer_texture: buffer_texture.clone(),
+            colors_texture: colors_texture.clone(),
             last_instant: Instant::now()
         }
     }
 }
 
 impl<CtxHandler: ContextHandler> EventHandler for Stage<CtxHandler> {
-    fn update(&mut self, ctx: &mut Context) {
+    fn update(&mut self, ctx: &mut Context, win_ctx: &mut WindowContext) {
         if self.context_data.quit_fired {
-            ctx.quit();
+            win_ctx.quit();
         }
         let dt = self.last_instant.elapsed().as_micros() as f32 / 1000000.0;
         self.last_instant = Instant::now();
@@ -774,7 +770,7 @@ impl<CtxHandler: ContextHandler> EventHandler for Stage<CtxHandler> {
         self.buffer_texture.update(ctx, &self.context_data.buffer_pixels);
     }
 
-    fn draw(&mut self, ctx: &mut Context) {
+    fn draw(&mut self, ctx: &mut Context, win_ctx: &mut WindowContext) {
         { // render out color buffer into offscreen texture
             ctx.begin_pass(
                 self.offscreen_pass,
@@ -788,7 +784,7 @@ impl<CtxHandler: ContextHandler> EventHandler for Stage<CtxHandler> {
             ctx.end_render_pass();
         }
 
-        let aspect = ctx.screen_size().1 / ctx.screen_size().0;
+        let aspect = ctx.get_window_size().1 as f32 / ctx.get_window_size().0 as f32;
 
         ctx.begin_default_pass(PassAction::clear_color(0.0, 0.0, 0.0, 1.0));
         { // render a screen
@@ -809,18 +805,28 @@ impl<CtxHandler: ContextHandler> EventHandler for Stage<CtxHandler> {
         ctx.commit_frame();
     }
 
-    fn mouse_motion_event(&mut self, ctx: &mut Context, x: f32, y: f32) {
-        let screen_size = ctx.screen_size();
-        let aspect = screen_size.0 / screen_size.1;
+    fn mouse_motion_event(
+        &mut self,
+        ctx: &mut Context, win_ctx: &mut WindowContext,
+        x: i32, y: i32,
+        x_rel: i32, y_rel: i32
+    ) {
+        let screen_size = ctx.get_window_size();
+        let aspect = screen_size.0 as f32 / screen_size.1 as f32;
 
-        let x = (x / screen_size.0 - 0.5) * 2.0 * aspect;
-        let y = -((y / screen_size.1 - 0.5) * 2.0);
+        let x = (x as f32 / screen_size.0 as f32 - 0.5) * 2.0 * aspect;
+        let y = -((y as f32 / screen_size.1 as f32 - 0.5) * 2.0);
 
         self.check_for_hit_test(x, y);
     }
 
-    fn mouse_button_down_event(&mut self, ctx: &mut Context, button: MouseButton, x: f32, y: f32) {
-        self.mouse_motion_event(ctx, x, y);
+    fn mouse_button_down_event(
+        &mut self,
+        ctx: &mut Context, win_ctx: &mut WindowContext,
+        button: MouseButton, x: i32, y: i32,
+        clicks: u8
+    ) {
+        self.mouse_motion_event(ctx, win_ctx, x as _, y as _, 0, 0);
         match button {
             MouseButton::Left => { self.handler.on_mouse_down(&mut self.context_data, 0); },
             MouseButton::Middle => { self.handler.on_mouse_down(&mut self.context_data, 1); },
@@ -829,8 +835,13 @@ impl<CtxHandler: ContextHandler> EventHandler for Stage<CtxHandler> {
         }
     }
 
-    fn mouse_button_up_event(&mut self, ctx: &mut Context, button: MouseButton, x: f32, y: f32) {
-        self.mouse_motion_event(ctx, x, y);
+    fn mouse_button_up_event(
+        &mut self,
+        ctx: &mut Context, win_ctx: &mut WindowContext,
+        button: MouseButton, x: i32, y: i32,
+        clicks: u8
+    ) {
+        self.mouse_motion_event(ctx, win_ctx,x as _, y as _, 0, 0);
         match button {
             MouseButton::Left => { self.handler.on_mouse_up(&mut self.context_data, 0); },
             MouseButton::Middle => { self.handler.on_mouse_up(&mut self.context_data, 1); },
@@ -841,9 +852,9 @@ impl<CtxHandler: ContextHandler> EventHandler for Stage<CtxHandler> {
 
     fn key_down_event(
         &mut self,
-        _ctx: &mut Context,
-        keycode: orom_miniquad::KeyCode,
-        keymods: orom_miniquad::KeyMods,
+        _ctx: &mut Context, win_ctx: &mut WindowContext,
+        keycode: gl_pipelines::window::KeyCode,
+        keymods: gl_pipelines::window::KeyMods,
         _repeat: bool,
     ) {
         let new_key_mods = KeyMods {
@@ -865,9 +876,9 @@ impl<CtxHandler: ContextHandler> EventHandler for Stage<CtxHandler> {
 
     fn key_up_event(
         &mut self,
-        _ctx: &mut Context,
-        keycode: orom_miniquad::KeyCode,
-        keymods: orom_miniquad::KeyMods
+        _ctx: &mut Context, win_ctx: &mut WindowContext,
+        keycode: gl_pipelines::window::KeyCode,
+        keymods: gl_pipelines::window::KeyMods
     ) {
         let new_key_mods = KeyMods {
             shift: keymods.shift,
@@ -933,7 +944,7 @@ impl<CtxHandler: ContextHandler> Stage<CtxHandler> {
 }
 
 mod offscreen_shader {
-    use orom_miniquad::*;
+    use gl_pipelines::*;
 
     pub const VERTEX:&str = r#"#version 100
         attribute vec2 pos;
@@ -973,7 +984,7 @@ mod offscreen_shader {
 }
 
 mod mask_shader {
-    use orom_miniquad::*;
+    use gl_pipelines::*;
 
     pub const VERTEX:&str = r#"#version 100
         attribute vec4 pos;
@@ -1014,7 +1025,7 @@ mod mask_shader {
 }
 
 mod screen_shader {
-    use orom_miniquad::*;
+    use gl_pipelines::*;
 
     pub const VERTEX:&str = r#"#version 100
         attribute vec4 pos;
@@ -1094,17 +1105,16 @@ impl WindowMode {
 }
 
 pub fn start<CtxHandler: 'static + ContextHandler>(handler: CtxHandler) {
-    let conf = conf::Conf {
+    let conf = gl_pipelines::window::Conf {
         window_title: handler.get_window_title().to_string(),
         window_width: 1024,
         window_height: 768,
         high_dpi: true,
         fullscreen: false,
         sample_count: 6,
+        sample_buffers: 1,
         window_resizable: true
     };
 
-    orom_miniquad::start(conf, |mut ctx| {
-        UserData::owning(Stage::new(&mut ctx, handler), ctx)
-    });
+    gl_pipelines::window::start_parametrized::<Stage<CtxHandler>, CtxHandler>(conf, handler);
 }
