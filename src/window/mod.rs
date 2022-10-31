@@ -770,7 +770,7 @@ impl<CtxHandler: ContextHandler> EventHandler for Stage<CtxHandler> {
         self.buffer_texture.update(ctx, &self.context_data.buffer_pixels);
     }
 
-    fn draw(&mut self, ctx: &mut Context, win_ctx: &mut WindowContext) {
+    fn draw(&mut self, ctx: &mut Context, _win_ctx: &mut WindowContext) {
         { // render out color buffer into offscreen texture
             ctx.begin_pass(
                 self.offscreen_pass,
@@ -807,9 +807,9 @@ impl<CtxHandler: ContextHandler> EventHandler for Stage<CtxHandler> {
 
     fn mouse_motion_event(
         &mut self,
-        ctx: &mut Context, win_ctx: &mut WindowContext,
+        ctx: &mut Context, _win_ctx: &mut WindowContext,
         x: i32, y: i32,
-        x_rel: i32, y_rel: i32
+        _x_rel: i32, _y_rel: i32
     ) {
         let screen_size = ctx.get_window_size();
         let aspect = screen_size.0 as f32 / screen_size.1 as f32;
@@ -824,7 +824,7 @@ impl<CtxHandler: ContextHandler> EventHandler for Stage<CtxHandler> {
         &mut self,
         ctx: &mut Context, win_ctx: &mut WindowContext,
         button: MouseButton, x: i32, y: i32,
-        clicks: u8
+        _clicks: u8
     ) {
         self.mouse_motion_event(ctx, win_ctx, x as _, y as _, 0, 0);
         match button {
@@ -839,7 +839,7 @@ impl<CtxHandler: ContextHandler> EventHandler for Stage<CtxHandler> {
         &mut self,
         ctx: &mut Context, win_ctx: &mut WindowContext,
         button: MouseButton, x: i32, y: i32,
-        clicks: u8
+        _clicks: u8
     ) {
         self.mouse_motion_event(ctx, win_ctx,x as _, y as _, 0, 0);
         match button {
@@ -852,7 +852,7 @@ impl<CtxHandler: ContextHandler> EventHandler for Stage<CtxHandler> {
 
     fn key_down_event(
         &mut self,
-        _ctx: &mut Context, win_ctx: &mut WindowContext,
+        _ctx: &mut Context, _win_ctx: &mut WindowContext,
         keycode: gl_pipelines::window::KeyCode,
         keymods: gl_pipelines::window::KeyMods,
         _repeat: bool,
@@ -876,7 +876,7 @@ impl<CtxHandler: ContextHandler> EventHandler for Stage<CtxHandler> {
 
     fn key_up_event(
         &mut self,
-        _ctx: &mut Context, win_ctx: &mut WindowContext,
+        _ctx: &mut Context, _win_ctx: &mut WindowContext,
         keycode: gl_pipelines::window::KeyCode,
         keymods: gl_pipelines::window::KeyMods
     ) {

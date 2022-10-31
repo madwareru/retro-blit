@@ -24,10 +24,10 @@ pub enum Monster {
 impl Monster {
     pub(crate) fn speed(&self) -> f32 {
         match self {
-            Monster::Toad => 24.0,
-            Monster::Kobold => 36.0,
-            Monster::Rat => 48.0,
-            Monster::Skeleton => 18.0
+            Monster::Toad => 24.0 * 3.0,
+            Monster::Kobold => 36.0 * 3.0,
+            Monster::Rat => 48.0 * 3.0,
+            Monster::Skeleton => 18.0 * 3.0
         }
     }
 }

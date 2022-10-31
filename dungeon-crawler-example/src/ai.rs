@@ -65,20 +65,28 @@ impl App {
     }
 
     pub(crate) fn update_ai(&self, dt: f32) {
-        const PLAYER_SPOT_DIST: f32 = 192.0;
-        const PLAYER_SPOT_NEAR_DIST: f32 = 128.0;
-        const UNCERTAIN_SECONDS: f32 = 2.0;
+        const PLAYER_LOST_DIST: f32 = 256.0 * 2.0;
+        const PLAYER_SPOT_DIST: f32 = 192.0 * 2.0;
+        const PLAYER_SPOT_NEAR_DIST: f32 = 128.0 * 2.0;
+        const FIGHT_DIST: f32 = 48.0;
+        const LOST_FIGHT_DIST: f32 = 52.0;
+        const UNCERTAIN_SECONDS: f32 = 1.0;
+        const HIT_SPEED: f32 = 5.0;
 
         let player_position: glam::Vec2 = self.blackboard.player_position.into();
 
-        for (_, data) in self.world.query::<(&Monster, &Position, &mut DesiredVelocity, &mut MobState)>().iter() {
+        for (_, data) in self.world.query::<(&Monster, &mut Position, &mut DesiredVelocity, &mut MobState)>().iter() {
             let (_, pos, desired_velocity, state) = data;
             let p: glam::Vec2 = (*pos).into();
             match state {
                 MobState::Wandering { destination, time } => {
                     let dest = (*destination).into();
                     *time -= dt;
-                    if p.distance_squared(dest) < 1024.0 || *time < 0.01 {
+                    if p.distance_squared(player_position) < PLAYER_LOST_DIST * PLAYER_SPOT_DIST {
+                        desired_velocity.x = 0.0;
+                        desired_velocity.y = 0.0;
+                        *state = MobState::Anxious { uncertainty: UNCERTAIN_SECONDS }
+                    } else if p.distance_squared(dest) < 1024.0 || *time < 0.01 {
                         let mut rng = thread_rng();
                         *time = rng.gen_range(3.0..6.0);
                         let rnd_t = rng.gen_range(0.4 ..= 0.9);
@@ -121,13 +129,98 @@ impl App {
                     }
                 },
                 MobState::Anxious{ uncertainty } => {
-
+                    *uncertainty -= dt;
+                    desired_velocity.x = 0.0;
+                    desired_velocity.y = 0.0;
+                    if *uncertainty <= 0.0 || p.distance_squared(player_position) < PLAYER_SPOT_NEAR_DIST * PLAYER_SPOT_NEAR_DIST {
+                        *state = MobState::Angry;
+                    }
                 },
                 MobState::Angry => {
-
+                    let dst_sqr = p.distance_squared(player_position);
+                    if dst_sqr > PLAYER_LOST_DIST * PLAYER_LOST_DIST {
+                        desired_velocity.x = 0.0;
+                        desired_velocity.y = 0.0;
+                        *state = MobState::Wandering {
+                            destination: Position { x: p.x, y: p.y },
+                            time: 3.0
+                        };
+                    } else if dst_sqr < FIGHT_DIST * FIGHT_DIST {
+                        desired_velocity.x = 0.0;
+                        desired_velocity.y = 0.0;
+                        *state = MobState::Fight(FightPhase::CoolDown { time_left: 0.5 })
+                    } else {
+                        let delta = (player_position - p).normalize_or_zero();
+                        desired_velocity.x = delta.x;
+                        desired_velocity.y = delta.y;
+                    }
                 },
-                MobState::Fight(FightPhase) => {
-
+                MobState::Fight(fight_phase) => {
+                    match p.distance_squared(player_position) {
+                        dst_sqr if dst_sqr > LOST_FIGHT_DIST * LOST_FIGHT_DIST => {
+                            *state = MobState::Angry;
+                        }
+                        _ => {
+                            match fight_phase {
+                                FightPhase::CoolDown { time_left } => {
+                                    *time_left -= dt;
+                                    if *time_left < 0.0 {
+                                        let delta = (player_position - p).normalize_or_zero();
+                                        *fight_phase = FightPhase::Hip {
+                                            start_position: Position {
+                                                x: p.x,
+                                                y: p.y
+                                            },
+                                            end_position: Position {
+                                                x: p.x + delta.x * 24.0,
+                                                y: p.y + delta.y * 24.0
+                                            },
+                                            t: 0.0
+                                        }
+                                    }
+                                }
+                                FightPhase::Hip { start_position, end_position, t } => {
+                                    *t = (*t + dt * HIT_SPEED).clamp(0.0, 1.0);
+                                    pos.x = super::utils::lerp(
+                                        start_position.x,
+                                        end_position.x,
+                                        *t
+                                    );
+                                    pos.y = super::utils::lerp(
+                                        start_position.y,
+                                        end_position.y,
+                                        *t
+                                    );
+                                    if *t > 0.9999 {
+                                        // todo: do hit
+                                        *fight_phase = FightPhase::Hop {
+                                            start_position: *end_position,
+                                            end_position: *start_position,
+                                            t: 0.0
+                                        }
+                                    }
+                                }
+                                FightPhase::Hop { start_position, end_position, t } => {
+                                    *t = (*t + dt * HIT_SPEED).clamp(0.0, 1.0);
+                                    pos.x = super::utils::lerp(
+                                        start_position.x,
+                                        end_position.x,
+                                        *t
+                                    );
+                                    pos.y = super::utils::lerp(
+                                        start_position.y,
+                                        end_position.y,
+                                        *t
+                                    );
+                                    if *t > 0.9999 {
+                                        *fight_phase = FightPhase::CoolDown {
+                                            time_left: 0.5
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
