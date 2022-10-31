@@ -22,6 +22,42 @@ pub enum Monster {
 }
 
 impl Monster {
+    pub(crate) fn damage(&self) -> i32 {
+        match self {
+            Monster::Toad => 25,
+            Monster::Kobold => 10,
+            Monster::Rat => 3,
+            Monster::Skeleton => 15
+        }
+    }
+
+    pub(crate) fn fight_distance(&self) -> f32 {
+        match self {
+            Monster::Toad => 60.0,
+            Monster::Kobold => 54.0,
+            Monster::Rat => 48.0,
+            Monster::Skeleton => 58.0,
+        }
+    }
+
+    pub(crate) fn lost_fight_distance(&self) -> f32 {
+        match self {
+            Monster::Toad => 66.0,
+            Monster::Kobold => 60.0,
+            Monster::Rat => 52.0,
+            Monster::Skeleton => 64.0,
+        }
+    }
+
+    pub(crate) fn hit_distance(&self) -> f32 {
+        match self {
+            Monster::Toad => 54.0,
+            Monster::Kobold => 45.0,
+            Monster::Rat => 32.0,
+            Monster::Skeleton => 50.0,
+        }
+    }
+
     pub(crate) fn speed(&self) -> f32 {
         match self {
             Monster::Toad => 24.0 * 3.0,

@@ -22,6 +22,7 @@ const NOISE_PNG_BYTES: &[u8] = include_bytes!("noise.png");
 const MAP_BYTES: &[u8] = include_bytes!("map.im256");
 const GRAPHICS_BYTES: &[u8] = include_bytes!("dungeon_crawler.im256");
 const DARKEST_BLUE_IDX: usize = 0x02;
+const TINT_FADE_OUT_SPEED: f32 = 3.0;
 
 const PIXELS_PER_METER: f32 = 64.0;
 const VIEW_RANGE: f32 = 14.0;
@@ -56,11 +57,18 @@ pub struct AppFlags {
     pub dim_level: DimLevel
 }
 
+pub enum PaletteState {
+    ScrollingWater,
+    HpPickupTint { t: f32 },
+    MpPickupTint { t: f32 },
+    DamageTint { t: f32 },
+}
+
 pub struct App {
     scroll_timer: f32,
     flags: AppFlags,
     terrain_tiles: TerrainTiles,
-    palette: Vec<[u8; 3]>,
+    last_palette: Vec<[u8; 3]>,
     graphics: BlittableSurface,
     depth_buffer: Vec<f32>,
     font: Font,
@@ -68,6 +76,7 @@ pub struct App {
     noise_dither_lookup: Vec<f32>,
     blackboard: Blackboard,
     world: World,
+    palette_state: PaletteState
 }
 
 impl App {
@@ -102,7 +111,7 @@ impl App {
         Self {
             scroll_timer: 0.0,
             terrain_tiles,
-            palette,
+            last_palette: palette,
             graphics,
             depth_buffer,
             flags: AppFlags {
@@ -116,6 +125,7 @@ impl App {
             noise_dither_lookup,
             blackboard: Blackboard { player_position: Position { x: 0.0, y: 0.0 } },
             world,
+            palette_state: PaletteState::ScrollingWater
         }
     }
 
@@ -590,19 +600,87 @@ Esc: Quit game"##,
         }
     }
 
-    fn update_palette_scrolling(&mut self, ctx: &mut RetroBlitContext, dt: f32) {
-        self.scroll_timer += dt;
+    fn update_palette(&mut self, ctx: &mut RetroBlitContext, dt: f32) {
+        match &mut self.palette_state {
+            PaletteState::ScrollingWater => {
+                self.scroll_timer += dt;
 
-        while self.scroll_timer > 0.2 {
-            self.scroll_timer -= 0.2;
-            for i in 0..7 {
-                ctx.scroll_palette(
-                    ScrollKind::Range { start_idx: 26 + 36 * i, len: 6 },
-                    ScrollDirection::Forward
-                );
+                while self.scroll_timer > 0.2 {
+                    self.scroll_timer -= 0.2;
+                    for i in 0..7 {
+                        ctx.scroll_palette(
+                            ScrollKind::Range { start_idx: 26 + 36 * i, len: 6 },
+                            ScrollDirection::Forward
+                        );
+                    }
+                }
+            }
+            PaletteState::HpPickupTint { t } => {
+                if *t <= 0.0 {
+                    for (ix, clr) in self.last_palette.iter().enumerate() {
+                        ctx.set_palette(ix as _, *clr);
+                    }
+                    self.palette_state = PaletteState::ScrollingWater;
+                } else {
+                    for (ix, clr) in self.last_palette.iter().enumerate() {
+                        let r = clr[0] as f32 / 2.0;
+                        let g = (clr[1] as f32 + 255.0) / 2.0;
+                        let b = clr[2] as f32 / 2.0;
+                        let clr = [
+                            utils::lerp(clr[0] as f32, r, *t).clamp(0.0, 255.0) as u8,
+                            utils::lerp(clr[1] as f32, g, *t).clamp(0.0, 255.0) as u8,
+                            utils::lerp(clr[2] as f32, b, *t).clamp(0.0, 255.0) as u8
+                        ];
+                        ctx.set_palette(ix as _, clr);
+                    }
+                    *t -= dt * TINT_FADE_OUT_SPEED;
+                }
+            }
+            PaletteState::MpPickupTint { t } => {
+                if *t <= 0.0 {
+                    for (ix, clr) in self.last_palette.iter().enumerate() {
+                        ctx.set_palette(ix as _, *clr);
+                    }
+                    self.palette_state = PaletteState::ScrollingWater;
+                } else {
+                    for (ix, clr) in self.last_palette.iter().enumerate() {
+                        let r = clr[0] as f32 / 2.0;
+                        let g = clr[1] as f32 / 2.0;
+                        let b = (clr[2] as f32 + 255.0) / 2.0;
+                        let clr = [
+                            utils::lerp(clr[0] as f32, r, *t).clamp(0.0, 255.0) as u8,
+                            utils::lerp(clr[1] as f32, g, *t).clamp(0.0, 255.0) as u8,
+                            utils::lerp(clr[2] as f32, b, *t).clamp(0.0, 255.0) as u8
+                        ];
+                        ctx.set_palette(ix as _, clr);
+                    }
+                    *t -= dt * TINT_FADE_OUT_SPEED;
+                }
+            }
+            PaletteState::DamageTint { t } => {
+                if *t <= 0.0 {
+                    for (ix, clr) in self.last_palette.iter().enumerate() {
+                        ctx.set_palette(ix as _, *clr);
+                    }
+                    self.palette_state = PaletteState::ScrollingWater;
+                } else {
+                    for (ix, clr) in self.last_palette.iter().enumerate() {
+                        let r = (clr[0] as f32 + 255.0) / 2.0;
+                        let g = clr[1] as f32 / 2.0;
+                        let b = clr[2] as f32 / 2.0;
+                        let clr = [
+                            utils::lerp(clr[0] as f32, r, *t).clamp(0.0, 255.0) as u8,
+                            utils::lerp(clr[1] as f32, g, *t).clamp(0.0, 255.0) as u8,
+                            utils::lerp(clr[2] as f32, b, *t).clamp(0.0, 255.0) as u8
+                        ];
+                        ctx.set_palette(ix as _, clr);
+                    }
+                    *t -= dt * TINT_FADE_OUT_SPEED;
+                }
             }
         }
     }
+
     fn render_minimap(&self, ctx: &mut RetroBlitContext) {
         let start_x;
         let start_y;
@@ -789,6 +867,23 @@ Esc: Quit game"##,
             foo(wang_data)
         }
     }
+
+    pub(crate) fn set_palette_state(&mut self, ctx: &mut RetroBlitContext, palette_state: PaletteState) {
+        match palette_state {
+            PaletteState::ScrollingWater => (),
+            _ => {
+                match self.palette_state {
+                    PaletteState::ScrollingWater => {
+                        for i in 0..self.last_palette.len() {
+                            self.last_palette[i] = ctx.get_palette(i as _);
+                        }
+                    }
+                    _ => ()
+                }
+            }
+        }
+        self.palette_state = palette_state;
+    }
 }
 
 impl ContextHandler for App {
@@ -861,9 +956,10 @@ impl ContextHandler for App {
 
     fn init(&mut self, ctx: &mut RetroBlitContext) {
         let mut offset = 0;
-        let darkest_blue = self.palette[DARKEST_BLUE_IDX];
+        let total_colors = self.last_palette.len() * 7;
+        let darkest_blue = self.last_palette[DARKEST_BLUE_IDX];
         for i in 0..7 {
-            for &pal_color in self.palette.iter() {
+            for &pal_color in self.last_palette.iter() {
                 let warm_overlay = [
                     if pal_color[0] < 235 { pal_color[0] + 20 } else { 255 },
                     if pal_color[1] < 246 { pal_color[1] + 9 } else { 255 },
@@ -907,13 +1003,14 @@ impl ContextHandler for App {
                 if offset < 255 { offset += 1; }
             }
         }
+        self.last_palette.resize(total_colors, [0, 0, 0]);
     }
 
     fn update(&mut self, ctx: &mut RetroBlitContext, dt: f32) {
-        self.update_palette_scrolling(ctx, dt);
+        self.update_palette(ctx, dt);
         self.update_input(ctx, dt);
         self.update_blackboard();
-        self.update_ai(dt);
+        self.update_ai(ctx, dt);
         self.render(ctx);
     }
 }

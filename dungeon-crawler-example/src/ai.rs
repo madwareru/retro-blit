@@ -1,6 +1,7 @@
 use glam::{vec2};
 use rand::{Rng, thread_rng};
-use crate::{App, CollisionTag, Monster, Player, Position};
+use retro_blit::window::RetroBlitContext;
+use crate::{App, CollisionTag, HP, Monster, PaletteState, Player, Position};
 use crate::components::DesiredVelocity;
 
 pub struct Blackboard {
@@ -68,20 +69,21 @@ impl App {
         coll_vec
     }
 
-    pub(crate) fn update_ai(&self, dt: f32) {
+    pub(crate) fn update_ai(&mut self, ctx: &mut RetroBlitContext, dt: f32) {
         const PLAYER_LOST_DIST: f32 = 256.0 * 2.0;
         const PLAYER_SPOT_DIST: f32 = 192.0 * 2.0;
         const PLAYER_SPOT_NEAR_DIST: f32 = 128.0 * 2.0;
-        const FIGHT_DIST: f32 = 48.0;
-        const LOST_FIGHT_DIST: f32 = 52.0;
         const UNCERTAIN_SECONDS: f32 = 1.0;
         const HIT_SPEED: f32 = 5.0;
 
         let player_position: glam::Vec2 = self.blackboard.player_position.into();
 
+        let mut damage = 0;
+
         for (_, data) in self.world.query::<(&Monster, &mut Position, &mut DesiredVelocity, &mut MobState)>().iter() {
-            let (_, pos, desired_velocity, state) = data;
+            let (monster, pos, desired_velocity, state) = data;
             let p: glam::Vec2 = (*pos).into();
+
             match state {
                 MobState::PreWandering { time } => {
                     *time -= dt;
@@ -155,7 +157,7 @@ impl App {
                         desired_velocity.x = 0.0;
                         desired_velocity.y = 0.0;
                         *state = MobState::PreWandering { time: 0.5 };
-                    } else if dst_sqr < FIGHT_DIST * FIGHT_DIST {
+                    } else if dst_sqr < monster.fight_distance() * monster.fight_distance() {
                         desired_velocity.x = 0.0;
                         desired_velocity.y = 0.0;
                         *state = MobState::Fight(FightPhase::CoolDown { time_left: 0.5 })
@@ -167,7 +169,7 @@ impl App {
                 },
                 MobState::Fight(fight_phase) => {
                     match p.distance_squared(player_position) {
-                        dst_sqr if dst_sqr > LOST_FIGHT_DIST * LOST_FIGHT_DIST => {
+                        dst_sqr if dst_sqr > monster.lost_fight_distance() * monster.lost_fight_distance() => {
                             *state = MobState::Angry;
                         }
                         _ => {
@@ -202,7 +204,13 @@ impl App {
                                         *t
                                     );
                                     if *t > 0.9999 {
-                                        // todo: do hit
+                                        {
+                                            let p: glam::Vec2 = (*pos).into();
+                                            let hit_dst_sqr = monster.hit_distance() * monster.hit_distance();
+                                            if p.distance_squared(player_position) < hit_dst_sqr {
+                                                damage += monster.damage();
+                                            }
+                                        }
                                         *fight_phase = FightPhase::Hop {
                                             start_position: *end_position,
                                             end_position: *start_position,
@@ -234,6 +242,13 @@ impl App {
                         }
                     }
                 }
+            }
+        }
+
+        if damage != 0 {
+            self.set_palette_state(ctx, PaletteState::DamageTint { t: 1.0 });
+            if let Some((_, (_, hp))) =self.world.query::<(&Player, &mut HP)>().iter().next() {
+                hp.0 = (hp.0 - damage).max(0);
             }
         }
 
