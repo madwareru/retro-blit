@@ -25,9 +25,13 @@ pub enum FightPhase {
 
 #[derive(Copy, Clone)]
 pub enum MobState {
-    /// Just wander to a random point on a map
+    /// Just stay at a place for a while
     /// * **player spotted far** -> go to Anxious state
     /// * **point reached** -> update point and start over
+    PreWandering { time: f32 },
+    /// Just wander to a random point on a map
+    /// * **player spotted far** -> go to Anxious state
+    /// * **point reached or time ended** -> go to PreWandering state
     Wandering { destination: Position, time: f32 },
     /// Recently player spotted at far
     /// * **uncertainty reached 0** -> go to Angry state
@@ -79,22 +83,17 @@ impl App {
             let (_, pos, desired_velocity, state) = data;
             let p: glam::Vec2 = (*pos).into();
             match state {
-                MobState::Wandering { destination, time } => {
-                    let dest = (*destination).into();
+                MobState::PreWandering { time } => {
                     *time -= dt;
-                    if p.distance_squared(player_position) < PLAYER_LOST_DIST * PLAYER_SPOT_DIST {
-                        desired_velocity.x = 0.0;
-                        desired_velocity.y = 0.0;
-                        *state = MobState::Anxious { uncertainty: UNCERTAIN_SECONDS }
-                    } else if p.distance_squared(dest) < 1024.0 || *time < 0.01 {
+                    if *time <= 0.0 {
                         let mut rng = thread_rng();
-                        *time = rng.gen_range(3.0..6.0);
+                        let time = rng.gen_range(3.0..6.0);
                         let rnd_t = rng.gen_range(0.4 ..= 0.9);
                         let pt = super::utils::get_point_on_golden_ratio_disk(rnd_t);
                         let delta = vec2(pt.0, pt.1) * 256.0;
                         let collisions_nearby = self.get_collisions_nearby(p.x, p.y);
 
-                        *destination = match super::collision::cast_circle(
+                        let destination = match super::collision::cast_circle(
                             &collisions_nearby,
                             p,
                             delta.normalize_or_zero(),
@@ -122,6 +121,20 @@ impl App {
                         };
                         desired_velocity.x = 0.0;
                         desired_velocity.y = 0.0;
+                        *state = MobState::Wandering { destination, time};
+                    }
+                },
+                MobState::Wandering { destination, time } => {
+                    let dest = (*destination).into();
+                    *time -= dt;
+                    if p.distance_squared(player_position) < PLAYER_LOST_DIST * PLAYER_SPOT_DIST {
+                        desired_velocity.x = 0.0;
+                        desired_velocity.y = 0.0;
+                        *state = MobState::Anxious { uncertainty: UNCERTAIN_SECONDS }
+                    } else if p.distance_squared(dest) < 1024.0 || *time < 0.01 {
+                        let mut rng = thread_rng();
+                        let time = rng.gen_range(1.0..2.0);
+                        *state = MobState::PreWandering { time };
                     } else {
                         let dir = (dest - p).normalize_or_zero();
                         desired_velocity.x = dir.x;
@@ -141,10 +154,7 @@ impl App {
                     if dst_sqr > PLAYER_LOST_DIST * PLAYER_LOST_DIST {
                         desired_velocity.x = 0.0;
                         desired_velocity.y = 0.0;
-                        *state = MobState::Wandering {
-                            destination: Position { x: p.x, y: p.y },
-                            time: 3.0
-                        };
+                        *state = MobState::PreWandering { time: 0.5 };
                     } else if dst_sqr < FIGHT_DIST * FIGHT_DIST {
                         desired_velocity.x = 0.0;
                         desired_velocity.y = 0.0;
@@ -213,6 +223,8 @@ impl App {
                                         *t
                                     );
                                     if *t > 0.9999 {
+                                        pos.x = end_position.x;
+                                        pos.y = end_position.y;
                                         *fight_phase = FightPhase::CoolDown {
                                             time_left: 0.5
                                         }
