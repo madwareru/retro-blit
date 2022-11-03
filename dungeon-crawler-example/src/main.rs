@@ -1,4 +1,6 @@
-use hecs::World;
+use glam::vec2;
+use hecs::{Entity, World};
+use smallvec::SmallVec;
 use retro_blit::rendering::blittable::{BlitBuilder, BufferProvider, BufferProviderMut, SizedSurface};
 use retro_blit::rendering::BlittableSurface;
 use retro_blit::rendering::bresenham::{BresenhamCircleDrawer, LineRasterizer};
@@ -77,6 +79,59 @@ pub struct App {
     blackboard: Blackboard,
     world: World,
     palette_state: PaletteState
+}
+
+impl App {
+    pub(crate) fn update_pickups(&mut self, ctx: &mut RetroBlitContext) {
+        let pos;
+        let health;
+        let mana_points;
+        if let Some((_, (_, position, hp, mp))) = self.world.query::<(&Player, &Position, &HP, &MP)>().iter().next() {
+            pos = *position;
+            health = hp.0;
+            mana_points = mp.0;
+        } else {
+            return;
+        }
+        let pos = vec2(pos.x, pos.y);
+
+        let mut new_health = health;
+        let mut new_mp = mana_points;
+
+        let mut entities_to_delete: SmallVec<[Entity; 8]> = SmallVec::new();
+        for (e, (potion, position)) in self.world.query::<(&Potion, &Position)>().iter() {
+            let potion_position = vec2(position.x, position.y);
+            if potion_position.distance_squared(pos) <= 256.0 {
+                match potion {
+                    Potion::Health if new_health < 100 => {
+                        new_health = (new_health + 20).min(100);
+                        entities_to_delete.push(e);
+                    }
+                    Potion::Mana if new_mp < 100 => {
+                        new_mp = (new_mp + 20).min(100);
+                        entities_to_delete.push(e);
+                    }
+                    _ => ()
+                }
+            }
+        }
+
+        if new_health > health {
+            self.set_palette_state(ctx, PaletteState::HpPickupTint { t: 1.0 });
+            if let Some((_, (_, hp))) = self.world.query::<(&Player, &mut HP)>().iter().next() {
+                *hp = HP(new_health);
+            }
+        } else if new_mp > mana_points {
+            self.set_palette_state(ctx, PaletteState::MpPickupTint { t: 1.0 });
+            if let Some((_, (_, mp))) = self.world.query::<(&Player, &mut MP)>().iter().next() {
+                *mp = MP(new_mp);
+            }
+        }
+
+        for e in entities_to_delete.drain(..) {
+            self.world.despawn(e).unwrap();
+        }
+    }
 }
 
 impl App {
@@ -1011,6 +1066,7 @@ impl ContextHandler for App {
         self.update_input(ctx, dt);
         self.update_blackboard();
         self.update_ai(ctx, dt);
+        self.update_pickups(ctx);
         self.render(ctx);
     }
 }
