@@ -1,8 +1,13 @@
 use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
+use flat_spatial::grid::GridHandle;
 use glam::{Vec2, vec2};
 use hecs::Entity;
-use crate::App;
+
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub struct SpatialHandle {
+    pub handle: GridHandle
+}
 
 #[derive(Copy, Clone)]
 pub struct Player;
@@ -80,61 +85,66 @@ impl Monster {
     }
 }
 
-pub trait CastImpl: Copy + Send + Sync {
-    fn cast(
-        self,
-        app: &mut App,
-        caster: Entity,
-        cast_position: Position,
-        cast_angle: Angle,
-    );
-
+pub trait CastInfo: Copy + Send + Sync {
     fn cool_down_duration() -> f32;
-    fn pre_cast_duration() -> f32;
+    fn cast_duration() -> f32;
 }
 
 #[derive(Copy, Clone)]
-pub enum CastState<TCast: CastImpl> {
+pub enum CastState<TCast: CastInfo> {
     NoCast(PhantomData<TCast>),
     PreCast { t: f32 },
+    Cast {t: f32},
     CoolDown { t: f32 }
 }
 
-pub trait CastStateImpl<TCast: CastImpl>: Copy + Sync + Send {
+pub trait CastStateImpl<TCast: CastInfo>: Copy + Sync + Send {
     fn new() -> Self;
-    fn update(&mut self, entity: Entity, pos: Position, ang: Angle, cast: TCast, app: &mut App, dt: f32);
+    fn update(&mut self, dt: f32) -> bool;
     fn try_cast(&mut self) -> bool;
     fn get_anim_info(self) -> Self;
 }
 
-impl<TCast: CastImpl> CastStateImpl<TCast> for CastState<TCast> {
+impl<TCast: CastInfo> CastStateImpl<TCast> for CastState<TCast> {
     fn new() -> Self { Self::NoCast(PhantomData) }
 
-    fn update(&mut self, entity: Entity, pos: Position, ang: Angle, cast: TCast, app: &mut App, dt: f32) {
+    fn update(&mut self, dt: f32) -> bool {
         match self {
             CastState::PreCast { t } => {
                 if *t <= 0.0 {
-                    cast.cast(app, entity, pos, ang);
-                    *self = CastState::CoolDown { t: TCast::cool_down_duration() };
+                    *self = CastState::Cast { t: TCast::cast_duration() };
+                    true
                 } else {
                     *t -= dt;
+                    false
+                }
+            },
+            CastState::Cast { t } => {
+                if *t <= 0.0 {
+                    *self = CastState::CoolDown { t: TCast::cool_down_duration() };
+                    false
+                } else {
+                    *t -= dt;
+                    false
                 }
             }
             CastState::CoolDown { t } => {
                 if *t <= 0.0 {
                     *self = CastState::NoCast(PhantomData);
+                    false
                 } else {
                     *t -= dt;
+                    false
                 }
             },
-            _ => ()
+            _ => false
         }
     }
 
     fn try_cast(&mut self) -> bool {
         match self {
             CastState::NoCast(_) => {
-                *self = Self::PreCast { t: TCast::pre_cast_duration() };
+                *self = Self::PreCast { t: TCast::cast_duration() };
                 true
             }
             _ => false
@@ -145,7 +155,10 @@ impl<TCast: CastImpl> CastStateImpl<TCast> for CastState<TCast> {
         match self {
             CastState::NoCast(_) => Self::NoCast(PhantomData),
             CastState::PreCast { t } => Self::PreCast {
-                t: (TCast::pre_cast_duration() - t) / TCast::pre_cast_duration()
+                t: (TCast::cast_duration() - t) / TCast::cast_duration()
+            },
+            CastState::Cast { t } => Self::Cast {
+                t: (TCast::cast_duration() - t) / TCast::cast_duration()
             },
             CastState::CoolDown { t } => Self::CoolDown {
                 t: (TCast::cool_down_duration() - t) / TCast::cool_down_duration()
@@ -161,20 +174,10 @@ pub struct MeleeCast {
     pub cast_damage: i32
 }
 
-impl CastImpl for MeleeCast {
-    fn cast(
-        self,
-        app: &mut App,
-        caster: Entity,
-        cast_position: Position,
-        cast_angle: Angle
-    ) {
-        app.cast_melee(self, caster, cast_position, cast_angle);
-    }
-
+impl CastInfo for MeleeCast {
     fn cool_down_duration() -> f32 { 0.15 }
 
-    fn pre_cast_duration() -> f32 { 0.1 }
+    fn cast_duration() -> f32 { 0.1 }
 }
 
 pub type MeleeCastState = CastState<MeleeCast>;
@@ -185,20 +188,10 @@ pub struct FreezeSpellCast {
     pub blast_range: f32,
 }
 
-impl CastImpl for FreezeSpellCast {
-    fn cast(
-        self,
-        app: &mut App,
-        caster: Entity,
-        cast_position: Position,
-        cast_angle: Angle
-    ) {
-        app.cast_freeze_spell(self, caster, cast_position, cast_angle);
-    }
+impl CastInfo for FreezeSpellCast {
+    fn cool_down_duration() -> f32 { 1.3 }
 
-    fn cool_down_duration() -> f32 { 0.3 }
-
-    fn pre_cast_duration() -> f32 { 0.15 }
+    fn cast_duration() -> f32 { 0.15 }
 }
 
 

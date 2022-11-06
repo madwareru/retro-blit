@@ -2,7 +2,7 @@ use glam::{vec2};
 use rand::{Rng, thread_rng};
 use retro_blit::window::RetroBlitContext;
 use crate::{App, CollisionTag, HP, Monster, PaletteState, Player, Position};
-use crate::components::DesiredVelocity;
+use crate::components::{DesiredVelocity, SpatialHandle};
 
 pub struct Blackboard {
     /// shared data on a placement of player updated each frame which can then be observed by AI agents
@@ -55,6 +55,17 @@ impl App {
             self.blackboard.player_position = *position;
         }
     }
+
+    pub(crate) fn update_spatial_partition(&mut self) {
+        for (_, (spatial_handle, position)) in self.world.query::<(
+            &SpatialHandle,
+            &Position
+        )>().iter() {
+            self.spatial_map.set_position(spatial_handle.handle, [position.x, position.y]);
+        }
+        self.spatial_map.maintain();
+    }
+
 
     fn get_collisions_nearby(&self, x_pos: f32, y_pos: f32) -> super::collision::CollisionVec {
         let mut coll_vec = super::collision::CollisionVec::new();

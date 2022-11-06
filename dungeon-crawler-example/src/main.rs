@@ -1,5 +1,6 @@
+use std::borrow::BorrowMut;
 use glam::vec2;
-use hecs::{Entity, World};
+use hecs::{CommandBuffer, Entity, World};
 use smallvec::SmallVec;
 use retro_blit::rendering::blittable::{BlitBuilder, BufferProvider, BufferProviderMut, SizedSurface};
 use retro_blit::rendering::BlittableSurface;
@@ -7,10 +8,9 @@ use retro_blit::rendering::bresenham::{BresenhamCircleDrawer, LineRasterizer};
 use retro_blit::rendering::fonts::font_align::{HorizontalAlignment, VerticalAlignment};
 use retro_blit::rendering::fonts::tri_spaced::{Font, TextDrawer};
 use retro_blit::window::{ContextHandler, KeyCode, KeyMod, KeyMods, RetroBlitContext, ScrollDirection, ScrollKind, WindowMode};
-use retro_blit::window::KeyCode::P;
 use crate::ai::Blackboard;
 use crate::collision::{CollisionTag, CollisionVec};
-use crate::components::{Angle, CastImpl, CastState, CastStateImpl, FreezeSpellCast, FreezeSpellCastState, HP, MeleeCast, MeleeCastState, Monster, MP, Player, Position, Potion, TerrainProp, TileInfo, WangHeightMapEntry, WangTerrain, WangTerrainEntry};
+use crate::components::{Angle, CastInfo, CastState, CastStateImpl, FreezeSpellCast, FreezeSpellCastState, HP, MeleeCast, MeleeCastState, Monster, MP, Player, Position, Potion, SpatialHandle, TerrainProp, TileInfo, WangHeightMapEntry, WangTerrain, WangTerrainEntry};
 use crate::map_data::{HeightMapEntry, MapData};
 use crate::terrain_tiles_data::TerrainTiles;
 
@@ -79,29 +79,69 @@ pub struct App {
     noise_dither_lookup: Vec<f32>,
     blackboard: Blackboard,
     world: World,
+    command_buffer: CommandBuffer,
     palette_state: PaletteState,
+    bump_allocator: bumpalo::Bump,
+    spatial_map: flat_spatial::DenseGrid<Entity>,
 }
 
-impl App {
-    pub(crate) fn cast_melee(
-        &mut self,
-        cast: MeleeCast,
-        caster: Entity,
-        position: Position,
-        angle: Angle
-    ) {
-        // todo
+fn cast_melee(
+    world: &World,
+    command_buffer: &mut CommandBuffer,
+    bump_allocator: &bumpalo::Bump,
+    spatial_map: &mut flat_spatial::DenseGrid<Entity>,
+    cast: MeleeCast,
+    _caster: Entity,
+    position: Position,
+    angle: Angle
+) {
+    let mut dead_entities = bumpalo::collections::Vec::new_in(bump_allocator);
+    let angle = angle.0.to_radians();
+    let forward_vec = vec2(angle.sin(), -angle.cos());
+    let angle_cos = (cast.cast_angle / 2.0).cos();
+
+    for (_, &other_entity) in spatial_map
+        .query_around([position.x, position.y], 128.0)
+        .filter_map(|it | spatial_map.get(it.0)) {
+
+        let mut query = world.query_one::<(&Position, &mut HP)>(other_entity).unwrap();
+        let (other_pos, hp) = query.get().unwrap();
+
+        let pos = vec2(position.x, position.y);
+        let other_pos = vec2(other_pos.x, other_pos.y);
+        let delta = other_pos - pos;
+        let distance = delta.length();
+        if distance <= cast.cast_distance {
+            let delta = delta / distance;
+            let proj = delta.dot(forward_vec);
+            println!("proj: {proj}, angle_cos: {angle_cos}");
+            if (angle_cos..=1.0).contains(&proj) {
+                hp.0 = (hp.0 - cast.cast_damage).max(0);
+                if hp.0 == 0 {
+                    dead_entities.push(other_entity);
+                }
+            }
+        }
     }
 
-    pub(crate) fn cast_freeze_spell(
-        &self,
-        p0: FreezeSpellCast,
-        p1: Entity,
-        p2: Position,
-        p3: Angle
-    ) {
-        // todo
+    for dead_entity in dead_entities {
+        let spatial_handle = *world.get::<SpatialHandle>(dead_entity).unwrap();
+        spatial_map.remove(spatial_handle.handle);
+        command_buffer.despawn(dead_entity);
     }
+}
+
+fn cast_freeze_spell(
+    world: &World,
+    command_buffer: &mut CommandBuffer,
+    bump_allocator: &bumpalo::Bump,
+    spatial_map: &mut flat_spatial::DenseGrid<Entity>,
+    cast: FreezeSpellCast,
+    _caster: Entity,
+    position: Position,
+    angle: Angle
+) {
+    // todo
 }
 
 impl App {
@@ -173,7 +213,10 @@ impl App {
                 depth_buffer.push(depth);
             }
         }
-        map_data.populate_world(&mut world);
+
+        let mut spatial_map = flat_spatial::DenseGrid::new(64);
+
+        map_data.populate_world(&mut world, &mut spatial_map);
         let font = Font::default_font_small().unwrap();
 
         let noise_img = image::load_from_memory(NOISE_PNG_BYTES)
@@ -203,7 +246,10 @@ impl App {
             noise_dither_lookup,
             blackboard: Blackboard { player_position: Position { x: 0.0, y: 0.0 } },
             world,
+            command_buffer: CommandBuffer::new(),
             palette_state: PaletteState::ScrollingWater,
+            bump_allocator: bumpalo::Bump::new(),
+            spatial_map
         }
     }
 
@@ -615,10 +661,10 @@ impl App {
             CastState::PreCast { t } => {
                 (4 + (24.0 * t) as i16, 96 - 36 - (8.0 * t) as i16)
             },
-            CastState::CoolDown { t } => {
+            CastState::Cast { t } => {
                 (4 + (24.0 * (1.0 - t)) as i16, 96 - 36 - (8.0 * (1.0 - t)) as i16)
             },
-            CastState::NoCast(_) => {
+            _ => {
                 (4, 96 - 36)
             }
         };
@@ -627,10 +673,10 @@ impl App {
             CastState::PreCast { t } => {
                 (160-52 - (24.0 * t) as i16, 96 - 36 - (8.0 * t) as i16)
             },
-            CastState::CoolDown { t } => {
+            CastState::Cast { t } => {
                 (160-52 - (24.0 * (1.0 - t)) as i16, 96 - 36 - (8.0 * (1.0 - t)) as i16)
             },
-            CastState::NoCast(_) => {
+            _ => {
                 (160-52, 96 - 36)
             }
         };
@@ -685,28 +731,10 @@ Esc: Quit game"##,
 
     fn update_input(&mut self, ctx: &mut RetroBlitContext, dt: f32) {
         self.update_player_movement(ctx, dt);
-        self.update_player_casting(ctx, dt);
+        self.update_player_casting(ctx);
     }
 
-    fn update_casting<TCastState, TCastImpl>(&mut self, dt: f32)
-    where
-        TCastImpl: CastImpl + 'static,
-        TCastState: CastStateImpl<TCastImpl> + 'static
-    {
-        let mut world = std::mem::take(&mut self.world);
-
-        for (e, (cast_state, pos, ang, cast)) in world
-            .query::<(&mut TCastState, &Position, &Angle, &TCastImpl)>().iter() {
-            cast_state.update(e, *pos, *ang, *cast, self, dt);
-        }
-
-        self.world = world;
-    }
-
-    fn update_player_casting(&mut self, ctx: &mut RetroBlitContext, dt: f32) {
-        self.update_casting::<FreezeSpellCastState, FreezeSpellCast>(dt);
-        self.update_casting::<MeleeCastState, MeleeCast>(dt);
-
+    fn update_player_casting(&mut self, ctx: &mut RetroBlitContext) {
         let (cast_spell_pressed, cast_melee_pressed) = (
             ctx.is_key_pressed(KeyCode::Z),
             ctx.is_key_pressed(KeyCode::X)
@@ -724,7 +752,50 @@ Esc: Quit game"##,
             if cast_melee_pressed {
                 melee_cast_state.try_cast();
             }
-        };
+        }
+    }
+
+    fn update_castings(&mut self, dt: f32) {
+        let spatial = &mut self.spatial_map;
+        let cb = &mut self.command_buffer;
+        let allocator = &self.bump_allocator;
+        let world = &self.world;
+
+        fn do_work<TCastState, TState>
+        (
+            spatial_map: &mut flat_spatial::DenseGrid<Entity>,
+            cb: &mut CommandBuffer,
+            allocator: &bumpalo::Bump,
+            world: &World,
+            dt: f32,
+            foo: impl Fn(
+                &World,
+                &mut CommandBuffer,
+                &bumpalo::Bump,
+                &mut flat_spatial::DenseGrid<Entity>,
+                TState,
+                Entity,
+                Position,
+                Angle
+            ) -> ()
+        )
+        where
+            TCastState: CastStateImpl<TState> + 'static,
+            TState: CastInfo + 'static
+        {
+            for (e, (cast_state, pos, ang, cast)) in world
+                .query::<(&mut TCastState, &Position, &Angle, &TState)>()
+                .iter() {
+                if cast_state.update(dt) {
+                    foo(world, cb, allocator, spatial_map, *cast, e, *pos, *ang);
+                }
+            }
+        }
+
+        do_work::<FreezeSpellCastState, _>(spatial, cb, allocator, world, dt, cast_freeze_spell);
+        do_work::<MeleeCastState, _>(spatial, cb, allocator, world, dt, cast_melee);
+
+        self.command_buffer.run_on(&mut self.world)
     }
 
     fn update_player_movement(&mut self, ctx: &mut RetroBlitContext, dt: f32) {
@@ -800,7 +871,7 @@ Esc: Quit game"##,
                     for (ix, clr) in self.last_palette.iter().enumerate() {
                         let r = clr[0] as f32 / 2.0;
                         let g = (clr[1] as f32 + 255.0) / 2.0;
-                        let b = clr[2] as f32 / 2.0;
+                        let b = (clr[2] as f32 + 63.0) / 2.0;
                         let clr = [
                             utils::lerp(clr[0] as f32, r, *t).clamp(0.0, 255.0) as u8,
                             utils::lerp(clr[1] as f32, g, *t).clamp(0.0, 255.0) as u8,
@@ -819,8 +890,8 @@ Esc: Quit game"##,
                     self.palette_state = PaletteState::ScrollingWater;
                 } else {
                     for (ix, clr) in self.last_palette.iter().enumerate() {
-                        let r = clr[0] as f32 / 2.0;
-                        let g = clr[1] as f32 / 2.0;
+                        let r = (clr[0] as f32 + 63.0) / 2.0;
+                        let g = (clr[1] as f32 + 127.0) / 2.0;
                         let b = (clr[2] as f32 + 255.0) / 2.0;
                         let clr = [
                             utils::lerp(clr[0] as f32, r, *t).clamp(0.0, 255.0) as u8,
@@ -1183,8 +1254,10 @@ impl ContextHandler for App {
 
     fn update(&mut self, ctx: &mut RetroBlitContext, dt: f32) {
         self.update_palette(ctx, dt);
+        self.update_castings(dt);
         self.update_input(ctx, dt);
         self.update_blackboard();
+        self.update_spatial_partition();
         self.update_ai(ctx, dt);
         self.update_pickups(ctx);
         self.render(ctx);

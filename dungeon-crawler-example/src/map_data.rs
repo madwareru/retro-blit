@@ -1,7 +1,11 @@
 use std::collections::{HashMap, HashSet};
+use flat_spatial::cell::GridCell;
+use flat_spatial::Grid;
+use flat_spatial::storage::DenseStorage;
+use hecs::Entity;
 use retro_blit::rendering::blittable::BufferProvider;
 use crate::ai::MobState;
-use crate::components::{Angle, DesiredVelocity, FreezeSpellCastState, HP, MeleeCastState, MP, Player, Position, WangHeightMapEntry, WangTerrain, WangTerrainEntry};
+use crate::components::{Angle, DesiredVelocity, FreezeSpellCastState, HP, MeleeCastState, MP, Player, Position, SpatialHandle, WangHeightMapEntry, WangTerrain, WangTerrainEntry};
 use crate::{CastStateImpl, FreezeSpellCast, MeleeCast};
 
 #[derive(Copy, Clone, PartialEq)]
@@ -106,7 +110,7 @@ impl MapData {
         Self { height_map, monsters, potions, terrain_props, player_entry_point }
     }
 
-    pub fn populate_world(&self, world: &mut hecs::World) {
+    pub fn populate_world(&self, world: &mut hecs::World, spatial_map: &mut Grid<Entity, DenseStorage<GridCell>>) {
         let mut wang_terrain = WangTerrain {
             tiles: Vec::with_capacity((MapData::WIDTH-1) * (MapData::HEIGHT-1)),
             props: HashMap::new(),
@@ -164,13 +168,15 @@ impl MapData {
                 x: 0.0,
                 y: 0.0
             };
-            world.spawn((
+            let monster_entity = world.spawn((
                 monster,
                 position,
                 desired_velocity,
                 HP(monster.max_hp()),
                 MobState::Wandering { destination: position, time: 0.0 }
             ));
+            let handle = spatial_map.insert([position.x, position.y], monster_entity);
+            world.insert(monster_entity, (SpatialHandle { handle }, )).unwrap();
         }
 
         let player_position = Position {
