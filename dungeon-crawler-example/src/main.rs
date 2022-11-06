@@ -29,7 +29,7 @@ const TINT_FADE_OUT_SPEED: f32 = 3.0;
 const PIXELS_PER_METER: f32 = 64.0;
 const VIEW_RANGE: f32 = 14.0;
 
-const NEAR: f32 = 0.05 * PIXELS_PER_METER;
+const NEAR: f32 = 0.005 * PIXELS_PER_METER;
 const FAR: f32 = PIXELS_PER_METER * VIEW_RANGE;
 
 mod terrain_tiles_data;
@@ -43,20 +43,20 @@ pub enum AppOverlayState {
     Entry,
     NoOverlay,
     HelpContent,
-    MinimapView
+    MinimapView,
 }
 
 pub enum DimLevel {
     FullWithBlueNoise,
     FullWithDither,
-    DimOnly
+    DimOnly,
 }
 
 pub struct AppFlags {
     pub texture_terrain: bool,
     pub terrain_rendering_step: f32,
     pub fov_slope: f32,
-    pub dim_level: DimLevel
+    pub dim_level: DimLevel,
 }
 
 pub enum PaletteState {
@@ -78,7 +78,7 @@ pub struct App {
     noise_dither_lookup: Vec<f32>,
     blackboard: Blackboard,
     world: World,
-    palette_state: PaletteState
+    palette_state: PaletteState,
 }
 
 impl App {
@@ -173,14 +173,14 @@ impl App {
                 texture_terrain: true,
                 terrain_rendering_step: 1.0 / 512.0,
                 fov_slope: 1.0,
-                dim_level: DimLevel::DimOnly
+                dim_level: DimLevel::DimOnly,
             },
             font,
             overlay_state: AppOverlayState::Entry,
             noise_dither_lookup,
             blackboard: Blackboard { player_position: Position { x: 0.0, y: 0.0 } },
             world,
-            palette_state: PaletteState::ScrollingWater
+            palette_state: PaletteState::ScrollingWater,
         }
     }
 
@@ -285,6 +285,8 @@ impl App {
         self.render_objects(ctx);
 
         self.fade(ctx);
+
+        self.render_hands(ctx);
 
         self.draw_overlays(ctx);
 
@@ -440,7 +442,7 @@ impl App {
                             if let Some(TerrainProp::Stalagmite) = wang_terrain.props.get(&[dual_cell_coord.0 as u16, dual_cell_coord.1 as u16]) {
                                 terrain_bottom = utils::lerp(
                                     terrain_bottom,
-                                    if terrain_bottom < 0.3 { 0.4} else {0.75},
+                                    if terrain_bottom < 0.3 { 0.4 } else { 0.75 },
                                     self.terrain_tiles.sample_tile(
                                         TileInfo::Stalagmite,
                                         dual_cell_remainder.0,
@@ -568,6 +570,22 @@ impl App {
         1.0 / (corr * fov_slope / PIXELS_PER_METER)
     }
 
+    fn render_hands(&self, ctx: &mut RetroBlitContext) {
+        let sprite_sheet_with_color_key = self
+            .graphics
+            .with_color_key(0);
+
+        BlitBuilder::create(ctx, &sprite_sheet_with_color_key)
+            .with_source_subrect(0, 24, 48, 48)
+            .with_dest_pos(4, 96 - 36)
+            .blit();
+
+        BlitBuilder::create(ctx, &sprite_sheet_with_color_key)
+            .with_source_subrect(48, 24, 48, 48)
+            .with_dest_pos(160-52, 96 - 36)
+            .blit();
+    }
+
     fn draw_overlays(&self, ctx: &mut RetroBlitContext) {
         match self.overlay_state {
             AppOverlayState::Entry => {
@@ -578,10 +596,10 @@ impl App {
                     HorizontalAlignment::Left,
                     VerticalAlignment::Top,
                     "F1 for help!",
-                    Some(12)
+                    Some(12),
                 );
-            },
-            AppOverlayState::NoOverlay => {},
+            }
+            AppOverlayState::NoOverlay => {}
             AppOverlayState::HelpContent => {
                 self.font.draw_text_in_box(
                     ctx,
@@ -589,7 +607,6 @@ impl App {
                     160, 96,
                     HorizontalAlignment::Center,
                     VerticalAlignment::Center,
-
                     r##"Arrows: Movement
 Alt: Strafe
 Num keys 0-9: just check out
@@ -597,14 +614,13 @@ Num keys 0-9: just check out
 F1: Toggle help
 Tab: Toggle map
 Esc: Quit game"##,
-                    Some(12)
+                    Some(12),
                 );
             }
             AppOverlayState::MinimapView => {
                 self.render_minimap(ctx);
             }
         }
-
     }
 
     fn update_input(&mut self, ctx: &mut RetroBlitContext, dt: f32) {
@@ -642,14 +658,14 @@ Esc: Quit game"##,
             let angle = angle.0.to_radians();
             let (s, c) = (angle.sin() * dt, angle.cos() * dt);
             let speed_x = movement_speed * s - strafe_speed * c;
-            let speed_y = - movement_speed * c - strafe_speed * s;
+            let speed_y = -movement_speed * c - strafe_speed * s;
 
             self.with_wang_data(|wang_data| {
                 *pos = collision::move_position_towards(
                     *pos,
                     glam::vec2(speed_x, speed_y),
                     CollisionTag::All,
-                    wang_data
+                    wang_data,
                 );
             });
         }
@@ -665,7 +681,7 @@ Esc: Quit game"##,
                     for i in 0..7 {
                         ctx.scroll_palette(
                             ScrollKind::Range { start_idx: 26 + 36 * i, len: 6 },
-                            ScrollDirection::Forward
+                            ScrollDirection::Forward,
                         );
                     }
                 }
@@ -758,9 +774,9 @@ Esc: Quit game"##,
         let mut collision_vec = CollisionVec::new();
 
         self.with_wang_data(|wang_terrain| {
-            for j in 0..MapData::HEIGHT-1 {
-                for i in 0..MapData::WIDTH-1 {
-                    let idx = j * (MapData::WIDTH-1) + i;
+            for j in 0..MapData::HEIGHT - 1 {
+                for i in 0..MapData::WIDTH - 1 {
+                    let idx = j * (MapData::WIDTH - 1) + i;
                     if !wang_terrain.seen_tiles.contains(&[i as u16, j as u16]) {
                         continue;
                     }
@@ -770,7 +786,7 @@ Esc: Quit game"##,
                         &mut collision_vec,
                         &wang_terrain.tiles[idx],
                         i as f32 * 64.0,
-                        j as f32 * 64.0
+                        j as f32 * 64.0,
                     );
                     for collision in collision_vec.iter() {
                         let p0 = (
@@ -820,7 +836,7 @@ Esc: Quit game"##,
             return;
         }
 
-        for (_, (&potion, &Position{ x, y})) in self.world.query_mut::<(&Potion, &Position)>() {
+        for (_, (&potion, &Position { x, y })) in self.world.query_mut::<(&Potion, &Position)>() {
             let d_p = (x - pos_x, y - pos_y);
             let t = utils::dot(d_p, forward);
             if (NEAR..=FAR).contains(&t) {
@@ -841,7 +857,7 @@ Esc: Quit game"##,
                 if left >= 0.0 || right < 160.0 {
                     for j in upper..lower {
                         let v = ((j as f32 - up) / (down - up)).clamp(0.0, 1.0);
-                        for i in left.max(0.0) as usize .. right.min(159.0) as usize {
+                        for i in left.max(0.0) as usize..right.min(159.0) as usize {
                             let u = ((i as f32 - left) / (right - left)).clamp(0.0, 1.0);
                             let idx = j * 160 + i;
 
@@ -864,7 +880,7 @@ Esc: Quit game"##,
             }
         }
 
-        for (_, (&monster, &Position{ x, y})) in self.world.query_mut::<(&Monster, &Position)>() {
+        for (_, (&monster, &Position { x, y })) in self.world.query_mut::<(&Monster, &Position)>() {
             let d_p = (x - pos_x, y - pos_y);
             let t = utils::dot(d_p, forward);
             if (NEAR..=FAR).contains(&t) {
@@ -885,7 +901,7 @@ Esc: Quit game"##,
                 if left >= 0.0 || right < 160.0 {
                     for j in upper..lower {
                         let v = ((j as f32 - up) / (down - up)).clamp(0.0, 1.0);
-                        for i in left.max(0.0) as usize .. right.min(159.0) as usize {
+                        for i in left.max(0.0) as usize..right.min(159.0) as usize {
                             let u = ((i as f32 - left) / (right - left)).clamp(0.0, 1.0);
                             let idx = j * 160 + i;
 
@@ -912,13 +928,13 @@ Esc: Quit game"##,
     }
 
     pub(crate) fn with_wang_data(&self, mut foo: impl FnMut(&WangTerrain)) {
-        if let Some((_, (wang_data,))) = self.world.query::<(&WangTerrain,)>().iter().next() {
+        if let Some((_, (wang_data, ))) = self.world.query::<(&WangTerrain, )>().iter().next() {
             foo(wang_data)
         }
     }
 
     pub(crate) fn with_wang_data_mut(&self, mut foo: impl FnMut(&mut WangTerrain)) {
-        if let Some((_, (wang_data,))) = self.world.query::<(&mut WangTerrain,)>().iter().next() {
+        if let Some((_, (wang_data, ))) = self.world.query::<(&mut WangTerrain, )>().iter().next() {
             foo(wang_data)
         }
     }
@@ -950,58 +966,58 @@ impl ContextHandler for App {
         match key_code {
             KeyCode::Key1 => {
                 self.flags.fov_slope = 0.7;
-            },
+            }
             KeyCode::Key2 => {
                 self.flags.fov_slope = 0.8;
-            },
+            }
             KeyCode::Key3 => {
                 self.flags.fov_slope = 0.9;
-            },
+            }
             KeyCode::Key4 => {
                 self.flags.fov_slope = 1.0;
-            },
+            }
             KeyCode::Key5 => {
                 self.flags.fov_slope = 1.1;
-            },
+            }
             KeyCode::Key6 => {
                 self.flags.fov_slope = 1.2;
-            },
+            }
             KeyCode::Key7 => {
                 self.flags.fov_slope = 1.3;
-            },
+            }
             KeyCode::Key8 => {
                 self.flags.fov_slope = 1.4;
-            },
+            }
             KeyCode::Key0 => {
                 self.flags.texture_terrain = !self.flags.texture_terrain;
-            },
+            }
             KeyCode::Key9 => {
                 self.flags.dim_level = match self.flags.dim_level {
                     DimLevel::FullWithBlueNoise => DimLevel::FullWithDither,
                     DimLevel::FullWithDither => DimLevel::DimOnly,
                     DimLevel::DimOnly => DimLevel::FullWithBlueNoise
                 };
-            },
+            }
             KeyCode::Minus => {
                 self.flags.terrain_rendering_step = (self.flags.terrain_rendering_step * 2.0)
                     .clamp(1.0 / 4096.0, 1.0 / 8.0);
-            },
+            }
             KeyCode::Equal => {
                 self.flags.terrain_rendering_step = (self.flags.terrain_rendering_step / 2.0)
                     .clamp(1.0 / 4096.0, 1.0 / 8.0);
-            },
+            }
             KeyCode::F1 => {
                 self.overlay_state = match self.overlay_state {
                     AppOverlayState::HelpContent => AppOverlayState::NoOverlay,
                     _ => AppOverlayState::HelpContent
                 };
-            },
+            }
             KeyCode::Tab => {
                 self.overlay_state = match self.overlay_state {
                     AppOverlayState::MinimapView => AppOverlayState::NoOverlay,
                     _ => AppOverlayState::MinimapView
                 };
-            },
+            }
             KeyCode::Escape => {
                 ctx.quit();
             }
