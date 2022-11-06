@@ -7,9 +7,10 @@ use retro_blit::rendering::bresenham::{BresenhamCircleDrawer, LineRasterizer};
 use retro_blit::rendering::fonts::font_align::{HorizontalAlignment, VerticalAlignment};
 use retro_blit::rendering::fonts::tri_spaced::{Font, TextDrawer};
 use retro_blit::window::{ContextHandler, KeyCode, KeyMod, KeyMods, RetroBlitContext, ScrollDirection, ScrollKind, WindowMode};
+use retro_blit::window::KeyCode::P;
 use crate::ai::Blackboard;
 use crate::collision::{CollisionTag, CollisionVec};
-use crate::components::{Angle, HP, Monster, MP, Player, Position, Potion, TerrainProp, TileInfo, WangHeightMapEntry, WangTerrain, WangTerrainEntry};
+use crate::components::{Angle, CastImpl, CastState, CastStateImpl, FreezeSpellCast, FreezeSpellCastState, HP, MeleeCast, MeleeCastState, Monster, MP, Player, Position, Potion, TerrainProp, TileInfo, WangHeightMapEntry, WangTerrain, WangTerrainEntry};
 use crate::map_data::{HeightMapEntry, MapData};
 use crate::terrain_tiles_data::TerrainTiles;
 
@@ -79,6 +80,28 @@ pub struct App {
     blackboard: Blackboard,
     world: World,
     palette_state: PaletteState,
+}
+
+impl App {
+    pub(crate) fn cast_melee(
+        &mut self,
+        cast: MeleeCast,
+        caster: Entity,
+        position: Position,
+        angle: Angle
+    ) {
+        // todo
+    }
+
+    pub(crate) fn cast_freeze_spell(
+        &self,
+        p0: FreezeSpellCast,
+        p1: Entity,
+        p2: Position,
+        p3: Angle
+    ) {
+        // todo
+    }
 }
 
 impl App {
@@ -571,18 +594,55 @@ impl App {
     }
 
     fn render_hands(&self, ctx: &mut RetroBlitContext) {
+        let (spell, sword);
+
+        if let Some((_, (_, sp, sw))) = self.world.query::<(
+            &Player,
+            &FreezeSpellCastState,
+            &MeleeCastState)
+        >().iter().next() {
+            spell = sp.get_anim_info();
+            sword = sw.get_anim_info();
+        } else {
+            return;
+        }
+
         let sprite_sheet_with_color_key = self
             .graphics
             .with_color_key(0);
 
+        let (spell_arm_x, spell_arm_y) = match spell {
+            CastState::PreCast { t } => {
+                (4 + (24.0 * t) as i16, 96 - 36 - (8.0 * t) as i16)
+            },
+            CastState::CoolDown { t } => {
+                (4 + (24.0 * (1.0 - t)) as i16, 96 - 36 - (8.0 * (1.0 - t)) as i16)
+            },
+            CastState::NoCast(_) => {
+                (4, 96 - 36)
+            }
+        };
+
+        let (sword_arm_x, sword_arm_y) = match sword {
+            CastState::PreCast { t } => {
+                (160-52 - (24.0 * t) as i16, 96 - 36 - (8.0 * t) as i16)
+            },
+            CastState::CoolDown { t } => {
+                (160-52 - (24.0 * (1.0 - t)) as i16, 96 - 36 - (8.0 * (1.0 - t)) as i16)
+            },
+            CastState::NoCast(_) => {
+                (160-52, 96 - 36)
+            }
+        };
+
         BlitBuilder::create(ctx, &sprite_sheet_with_color_key)
             .with_source_subrect(0, 24, 48, 48)
-            .with_dest_pos(4, 96 - 36)
+            .with_dest_pos(spell_arm_x, spell_arm_y)
             .blit();
 
         BlitBuilder::create(ctx, &sprite_sheet_with_color_key)
             .with_source_subrect(48, 24, 48, 48)
-            .with_dest_pos(160-52, 96 - 36)
+            .with_dest_pos(sword_arm_x, sword_arm_y)
             .blit();
     }
 
@@ -624,6 +684,50 @@ Esc: Quit game"##,
     }
 
     fn update_input(&mut self, ctx: &mut RetroBlitContext, dt: f32) {
+        self.update_player_movement(ctx, dt);
+        self.update_player_casting(ctx, dt);
+    }
+
+    fn update_casting<TCastState, TCastImpl>(&mut self, dt: f32)
+    where
+        TCastImpl: CastImpl + 'static,
+        TCastState: CastStateImpl<TCastImpl> + 'static
+    {
+        let mut world = std::mem::take(&mut self.world);
+
+        for (e, (cast_state, pos, ang, cast)) in world
+            .query::<(&mut TCastState, &Position, &Angle, &TCastImpl)>().iter() {
+            cast_state.update(e, *pos, *ang, *cast, self, dt);
+        }
+
+        self.world = world;
+    }
+
+    fn update_player_casting(&mut self, ctx: &mut RetroBlitContext, dt: f32) {
+        self.update_casting::<FreezeSpellCastState, FreezeSpellCast>(dt);
+        self.update_casting::<MeleeCastState, MeleeCast>(dt);
+
+        let (cast_spell_pressed, cast_melee_pressed) = (
+            ctx.is_key_pressed(KeyCode::Z),
+            ctx.is_key_pressed(KeyCode::X)
+        );
+
+        if let Some((_, (_, mp, freeze_spell_cast_state, melee_cast_state))) = self.world.query::<(&Player, &mut MP, &mut FreezeSpellCastState, &mut MeleeCastState)>().iter().next() {
+            match cast_spell_pressed {
+                true if mp.0 >= 30 => {
+                    if freeze_spell_cast_state.try_cast() {
+                        mp.0 -= 30;
+                    }
+                },
+                _ => ()
+            }
+            if cast_melee_pressed {
+                melee_cast_state.try_cast();
+            }
+        };
+    }
+
+    fn update_player_movement(&mut self, ctx: &mut RetroBlitContext, dt: f32) {
         let (strafe_speed, turn_speed) = match (ctx.is_key_pressed(KeyCode::Left), ctx.is_key_pressed(KeyCode::Right)) {
             (true, false) => {
                 if ctx.is_key_mod_pressed(KeyMod::Option) {

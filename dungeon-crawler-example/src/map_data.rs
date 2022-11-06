@@ -1,7 +1,8 @@
 use std::collections::{HashMap, HashSet};
 use retro_blit::rendering::blittable::BufferProvider;
 use crate::ai::MobState;
-use crate::components::{Angle, DesiredVelocity, HP, MP, Player, Position, WangHeightMapEntry, WangTerrain, WangTerrainEntry};
+use crate::components::{Angle, DesiredVelocity, FreezeSpellCastState, HP, MeleeCastState, MP, Player, Position, WangHeightMapEntry, WangTerrain, WangTerrainEntry};
+use crate::{CastStateImpl, FreezeSpellCast, MeleeCast};
 
 #[derive(Copy, Clone, PartialEq)]
 pub enum HeightMapEntry { Water, Floor, Wall }
@@ -167,6 +168,7 @@ impl MapData {
                 monster,
                 position,
                 desired_velocity,
+                HP(monster.max_hp()),
                 MobState::Wandering { destination: position, time: 0.0 }
             ));
         }
@@ -180,7 +182,18 @@ impl MapData {
             player_position,
             HP(100),
             MP(100),
-            Angle(0.0)
+            Angle(0.0),
+            FreezeSpellCast {
+                duration: 4.0,
+                blast_range: 128.0
+            },
+            FreezeSpellCastState::new(),
+            MeleeCast {
+                cast_angle: 45.0f32.to_radians(),
+                cast_distance: 48.0,
+                cast_damage: 10
+            },
+            MeleeCastState::new()
         ));
     }
 }
