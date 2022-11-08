@@ -286,7 +286,18 @@ pub struct RetroBlitContext {
     mouse_y: f32,
     keys_pressed: HashSet<KeyCode>,
     key_mods_pressed: KeyMods,
-    quit_fired: bool
+    quit_fired: bool,
+    cursor_hidden_fired: Option<bool>
+}
+
+impl RetroBlitContext {
+    pub fn hide_cursor(&mut self) {
+        self.cursor_hidden_fired = Some(true);
+    }
+
+    pub fn show_cursor(&mut self) {
+        self.cursor_hidden_fired = Some(false);
+    }
 }
 
 pub enum ScrollKind {
@@ -617,7 +628,8 @@ impl<CtxHandler: ContextHandler> ParametrizedEventHandler<CtxHandler> for Stage<
                 option: false,
                 command: false
             },
-            quit_fired: false
+            quit_fired: false,
+            cursor_hidden_fired: None
         };
         context_data.init_audio();
 
@@ -759,6 +771,15 @@ impl<CtxHandler: ContextHandler> EventHandler for Stage<CtxHandler> {
     fn update(&mut self, ctx: &mut Context, win_ctx: &mut WindowContext) {
         if self.context_data.quit_fired {
             win_ctx.quit();
+            return;
+        }
+        if let Some(hide) = self.context_data.cursor_hidden_fired {
+            if hide {
+                win_ctx.hide_cursor();
+            } else {
+                win_ctx.show_cursor();
+            }
+            self.context_data.cursor_hidden_fired = None;
         }
         let dt = self.last_instant.elapsed().as_micros() as f32 / 1000000.0;
         self.last_instant = Instant::now();

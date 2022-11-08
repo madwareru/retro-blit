@@ -1,4 +1,4 @@
-use std::borrow::BorrowMut;
+use std::marker::PhantomData;
 use glam::vec2;
 use hecs::{CommandBuffer, Entity, World};
 use smallvec::SmallVec;
@@ -10,7 +10,7 @@ use retro_blit::rendering::fonts::tri_spaced::{Font, TextDrawer};
 use retro_blit::window::{ContextHandler, KeyCode, KeyMod, KeyMods, RetroBlitContext, ScrollDirection, ScrollKind, WindowMode};
 use crate::ai::Blackboard;
 use crate::collision::{CollisionTag, CollisionVec};
-use crate::components::{Angle, CastInfo, CastState, CastStateImpl, FreezeSpellCast, FreezeSpellCastState, HP, MeleeCast, MeleeCastState, Monster, MP, Player, Position, Potion, SpatialHandle, TerrainProp, TileInfo, WangHeightMapEntry, WangTerrain, WangTerrainEntry};
+use crate::components::*;
 use crate::map_data::{HeightMapEntry, MapData};
 use crate::terrain_tiles_data::TerrainTiles;
 
@@ -88,14 +88,13 @@ pub struct App {
 fn cast_melee(
     world: &World,
     command_buffer: &mut CommandBuffer,
-    bump_allocator: &bumpalo::Bump,
+    _bump_allocator: &bumpalo::Bump,
     spatial_map: &mut flat_spatial::DenseGrid<Entity>,
     cast: MeleeCast,
-    _caster: Entity,
+    caster: Entity,
     position: Position,
     angle: Angle
 ) {
-    let mut dead_entities = bumpalo::collections::Vec::new_in(bump_allocator);
     let angle = angle.0.to_radians();
     let forward_vec = vec2(angle.sin(), -angle.cos());
     let angle_cos = (cast.cast_angle / 2.0).cos();
@@ -103,6 +102,10 @@ fn cast_melee(
     for (_, &other_entity) in spatial_map
         .query_around([position.x, position.y], 128.0)
         .filter_map(|it | spatial_map.get(it.0)) {
+
+        if other_entity == caster {
+            continue;
+        }
 
         let mut query = world.query_one::<(&Position, &mut HP)>(other_entity).unwrap();
         let (other_pos, hp) = query.get().unwrap();
@@ -114,34 +117,48 @@ fn cast_melee(
         if distance <= cast.cast_distance {
             let delta = delta / distance;
             let proj = delta.dot(forward_vec);
-            println!("proj: {proj}, angle_cos: {angle_cos}");
             if (angle_cos..=1.0).contains(&proj) {
-                hp.0 = (hp.0 - cast.cast_damage).max(0);
-                if hp.0 == 0 {
-                    dead_entities.push(other_entity);
-                }
+                do_damage(other_entity, world, hp, cast.cast_damage, command_buffer);
             }
         }
     }
+}
 
-    for dead_entity in dead_entities {
-        let spatial_handle = *world.get::<SpatialHandle>(dead_entity).unwrap();
-        spatial_map.remove(spatial_handle.handle);
-        command_buffer.despawn(dead_entity);
+fn do_damage(entity: Entity, world: &World, hp: &mut HP, damage: i32, cb: &mut CommandBuffer) {
+    hp.0 = (hp.0 - damage).max(0);
+    if hp.0 > 0 {
+        if world.get::<DamageTint>(entity).is_err() {
+            cb.insert(entity, (DamageTint(0.05),));
+        }
     }
 }
 
 fn cast_freeze_spell(
-    world: &World,
+    _world: &World,
     command_buffer: &mut CommandBuffer,
-    bump_allocator: &bumpalo::Bump,
-    spatial_map: &mut flat_spatial::DenseGrid<Entity>,
+    _bump_allocator: &bumpalo::Bump,
+    _spatial_map: &mut flat_spatial::DenseGrid<Entity>,
     cast: FreezeSpellCast,
-    _caster: Entity,
+    caster: Entity,
     position: Position,
     angle: Angle
 ) {
-    // todo
+    let angle = angle.0.to_radians();
+    let forward_vec = vec2(angle.sin(), -angle.cos()) * 24.0;
+    command_buffer.spawn(
+        (
+            Projectile { caster, behaviour: FreezeSpellProjectile, _phantom_data: PhantomData },
+            Position{
+                x: position.x + forward_vec.x,
+                y: position.y + forward_vec.y
+            },
+            DesiredVelocity {
+                x: forward_vec.x * 4.0,
+                y: forward_vec.y * 4.0
+            },
+            cast
+        )
+    );
 }
 
 impl App {
@@ -346,19 +363,13 @@ impl App {
 
     fn render(&mut self, ctx: &mut RetroBlitContext) {
         ctx.clear(72);
-
         self.clear_depth_buffer();
-
         self.render_terrain(ctx);
-
         self.render_objects(ctx);
-
+        self.render_particles(ctx);
         self.fade(ctx);
-
         self.render_hands(ctx);
-
         self.draw_overlays(ctx);
-
         self.draw_hud(ctx);
     }
 
@@ -755,6 +766,102 @@ Esc: Quit game"##,
         }
     }
 
+    fn update_projectiles(&mut self, dt: f32) {
+        let spatial = &mut self.spatial_map;
+        let cb = &mut self.command_buffer;
+        let world = &self.world;
+
+        fn do_work<TProjectile, TCast>
+        (
+            spatial_map: &mut flat_spatial::DenseGrid<Entity>,
+            cb: &mut CommandBuffer,
+            world: &World,
+            dt: f32
+        )
+            where
+                TProjectile: ProjectileBehaviour<TCast>,
+                TCast: CastInfo
+        {
+            for (proj_entity, (proj, pos, desired_velocity, cast)) in world
+                .query::<(&Projectile<TCast, TProjectile>, &mut Position, &DesiredVelocity, &TCast)>()
+                .iter() {
+
+                for (_, &other_entity) in spatial_map
+                    .query_around([pos.x, pos.y], 24.0)
+                    .filter_map(|it | spatial_map.get(it.0)) {
+
+                    if proj.caster == other_entity {
+                        continue;
+                    }
+
+                    TProjectile::collide(*pos, *cast, cb);
+                    cb.despawn(proj_entity);
+                    return;
+                }
+
+                if let Some((_, (wang_data, ))) = world.query::<(&WangTerrain, )>().iter().next() {
+                    let (new_pos, collided) = collision::move_position_towards(
+                        *pos,
+                        vec2(desired_velocity.x * dt, desired_velocity.y * dt),
+                        CollisionTag::Wall,
+                        wang_data,
+                    );
+                    if collided {
+                        TProjectile::collide(new_pos, *cast, cb);
+                        cb.despawn(proj_entity);
+                        return;
+                    } else {
+                        cb.spawn((TProjectile::make_particle(new_pos.x, new_pos.y),));
+                    }
+                    *pos = new_pos;
+                }
+            }
+        }
+
+        do_work::<FreezeSpellProjectile, _>(spatial, cb, world, dt);
+
+        self.command_buffer.run_on(&mut self.world)
+    }
+
+    fn update_freeze_spell_blasts(&mut self) {
+        let spatial = &mut self.spatial_map;
+        let cb = &mut self.command_buffer;
+        let world = &self.world;
+
+        for (blast_entity, (_, pos, cast)) in world
+            .query::<(&FreezeSpellBlast, &Position, &FreezeSpellCast)>()
+            .iter() {
+
+            for (_, &other_entity) in spatial
+                .query_around([pos.x, pos.y], cast.blast_range)
+                .filter_map(|it | spatial.get(it.0)) {
+
+                if world.get::<FreezeStun>(other_entity).is_err() {
+                    cb.insert(other_entity, (FreezeStun(cast.duration),));
+                }
+            }
+            cb.despawn(blast_entity);
+        }
+
+        self.command_buffer.run_on(&mut self.world)
+    }
+
+    fn update_periodic_statuses<TStatus: PeriodicStatus>(&mut self, dt: f32) {
+        let cb = &mut self.command_buffer;
+        let world = &self.world;
+
+        for (status_entity, (status, )) in world
+            .query::<(&mut TStatus, )>()
+            .iter() {
+
+            if !status.update(dt) {
+                TStatus::on_status_off(status_entity, cb);
+            }
+        }
+
+        self.command_buffer.run_on(&mut self.world)
+    }
+
     fn update_castings(&mut self, dt: f32) {
         let spatial = &mut self.spatial_map;
         let cb = &mut self.command_buffer;
@@ -780,8 +887,8 @@ Esc: Quit game"##,
             ) -> ()
         )
         where
-            TCastState: CastStateImpl<TState> + 'static,
-            TState: CastInfo + 'static
+            TCastState: CastStateImpl<TState>,
+            TState: CastInfo
         {
             for (e, (cast_state, pos, ang, cast)) in world
                 .query::<(&mut TCastState, &Position, &Angle, &TState)>()
@@ -836,12 +943,13 @@ Esc: Quit game"##,
             let speed_y = -movement_speed * c - strafe_speed * s;
 
             self.with_wang_data(|wang_data| {
-                *pos = collision::move_position_towards(
+                let (new_pos, _) = collision::move_position_towards(
                     *pos,
                     glam::vec2(speed_x, speed_y),
                     CollisionTag::All,
                     wang_data,
                 );
+                *pos = new_pos;
             });
         }
     }
@@ -1011,7 +1119,7 @@ Esc: Quit game"##,
             return;
         }
 
-        for (_, (&potion, &Position { x, y })) in self.world.query_mut::<(&Potion, &Position)>() {
+        for (_, (&potion, &Position { x, y })) in self.world.query::<(&Potion, &Position)>().iter() {
             let d_p = (x - pos_x, y - pos_y);
             let t = utils::dot(d_p, forward);
             if (NEAR..=FAR).contains(&t) {
@@ -1055,7 +1163,10 @@ Esc: Quit game"##,
             }
         }
 
-        for (_, (&monster, &Position { x, y })) in self.world.query_mut::<(&Monster, &Position)>() {
+        for (monster_entity, (&monster, &Position { x, y })) in self.world.query::<(&Monster, &Position)>().iter() {
+            let frozen = self.world.get::<FreezeStun>(monster_entity).is_ok();
+            let has_damage_tint = self.world.get::<DamageTint>(monster_entity).is_ok();
+
             let d_p = (x - pos_x, y - pos_y);
             let t = utils::dot(d_p, forward);
             if (NEAR..=FAR).contains(&t) {
@@ -1080,22 +1191,152 @@ Esc: Quit game"##,
                             let u = ((i as f32 - left) / (right - left)).clamp(0.0, 1.0);
                             let idx = j * 160 + i;
 
-                            let ix = (u * 23.0) as usize + match monster {
-                                Monster::Toad => 0,
-                                Monster::Kobold => 24,
-                                Monster::Rat => 48,
-                                Monster::Skeleton => 72
+                            let (ix, iy) = if frozen {
+                                let ix = (u * 23.0) as usize + match monster {
+                                    Monster::Toad => 48,
+                                    Monster::Kobold => 96,
+                                    Monster::Rat => 96,
+                                    Monster::Skeleton => 72
+                                };
+                                let iy = (v * 23.0) as usize + match monster {
+                                    Monster::Toad => 72,
+                                    Monster::Kobold => 72,
+                                    Monster::Rat => 48,
+                                    Monster::Skeleton => 72
+                                };
+                                (ix, iy)
+                            } else {
+                                let ix = (u * 23.0) as usize + match monster {
+                                    Monster::Toad => 0,
+                                    Monster::Kobold => 24,
+                                    Monster::Rat => 48,
+                                    Monster::Skeleton => 72
+                                };
+                                let iy = (v * 23.0) as usize;
+                                (ix, iy)
                             };
-                            let iy = (v * 23.0) as usize;
 
                             let source_idx = self.graphics.get_width() * iy + ix;
                             let color = self.graphics.get_buffer()[source_idx];
 
                             if color != 0 && self.depth_buffer[idx] > depth {
                                 self.depth_buffer[idx] = depth;
+                                ctx.get_buffer_mut()[idx] = if has_damage_tint { 12 } else { color };
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        for (_, (&monster, &Position { x, y })) in self.world.query::<(&MonsterCorpseGhost, &Position)>().iter() {
+            let frozen = monster.frozen;
+
+            let d_p = (x - pos_x, y - pos_y);
+            let t = utils::dot(d_p, forward);
+            if (NEAR..=FAR).contains(&t) {
+                let depth = (t - NEAR) / (FAR - NEAR);
+                let u = utils::dot(d_p, right) / t / self.flags.fov_slope;
+
+                let x_scale = 40.0 * Self::scale_y(depth, self.flags.fov_slope);
+                let up = 48.0 - 24.0 * Self::scale_y(depth, self.flags.fov_slope);
+                let down = 48.0 + 56.0 * Self::scale_y(depth, self.flags.fov_slope);
+
+                let upper = (up).max(0.0) as usize;
+                let lower = (down).min(96.0) as usize;
+
+                let u_corr = (u + 1.0) * 79.5;
+                let left = u_corr - x_scale;
+                let right = u_corr + x_scale;
+
+                if left >= 0.0 || right < 160.0 {
+                    for j in upper..lower {
+                        let v = ((j as f32 - up) / (down - up)).clamp(0.0, 1.0);
+                        for i in left.max(0.0) as usize..right.min(159.0) as usize {
+                            let u = ((i as f32 - left) / (right - left)).clamp(0.0, 1.0);
+                            let idx = j * 160 + i;
+
+                            let (ix, iy) = if frozen {
+                                let ix = (u * 23.0) as usize + match monster.monster {
+                                    Monster::Toad => 48,
+                                    Monster::Kobold => 96,
+                                    Monster::Rat => 96,
+                                    Monster::Skeleton => 72
+                                };
+                                let iy = (v * 23.0) as usize + match monster.monster {
+                                    Monster::Toad => 72,
+                                    Monster::Kobold => 72,
+                                    Monster::Rat => 48,
+                                    Monster::Skeleton => 72
+                                };
+                                (ix, iy)
+                            } else {
+                                let ix = (u * 23.0) as usize + match monster.monster {
+                                    Monster::Toad => 0,
+                                    Monster::Kobold => 24,
+                                    Monster::Rat => 48,
+                                    Monster::Skeleton => 72
+                                };
+                                let iy = (v * 23.0) as usize;
+                                (ix, iy)
+                            };
+
+
+                            let source_idx = self.graphics.get_width() * iy + ix;
+                            let color = self.graphics.get_buffer()[source_idx];
+
+                            let lookup_idx = (j % 128) * 128 + i % 128;
+                            let color = if monster.life_time > self.noise_dither_lookup[lookup_idx] {
+                                color
+                            } else {
+                                0
+                            };
+
+                            if color != 0 && self.depth_buffer[idx] > depth {
+                                self.depth_buffer[idx] = depth;
                                 ctx.get_buffer_mut()[idx] = color;
                             }
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    fn render_particles(&mut self, ctx: &mut RetroBlitContext) {
+        let (forward, right, pos_x, pos_y);
+        if let Some((_, data)) = self.world.query::<(&Player, &Position, &Angle)>().iter().next() {
+            let (_, &Position { x, y }, &Angle(angle)) = data;
+            let angle = angle.to_radians();
+            forward = (angle.sin(), -angle.cos());
+            right = (angle.cos(), angle.sin());
+            pos_x = x;
+            pos_y = y;
+        } else {
+            return;
+        }
+
+        for (_, (&Particle { color_id, x, y, h, .. },)) in self.world.query::<(&Particle, )>().iter() {
+            let d_p = (x - pos_x, y - pos_y);
+            let t = utils::dot(d_p, forward);
+            if (NEAR..=FAR).contains(&t) {
+                let depth = (t - NEAR) / (FAR - NEAR);
+                let u = utils::dot(d_p, right) / t / self.flags.fov_slope;
+
+                let up = 48.0 - h * Self::scale_y(depth, self.flags.fov_slope);
+
+                let upper = (up).max(0.0) as usize;
+
+                let u_corr = (u + 1.0) * 79.5;
+
+                if u_corr >= 0.0 || u_corr < 160.0 {
+                    let j = upper;
+                    let i = u_corr.clamp(0.0, 159.0) as usize;
+                    let idx = j * 160 + i;
+
+                    if idx < self.depth_buffer.len() && self.depth_buffer[idx] > depth {
+                        self.depth_buffer[idx] = depth;
+                        ctx.get_buffer_mut()[idx] = color_id;
                     }
                 }
             }
@@ -1201,6 +1442,8 @@ impl ContextHandler for App {
     }
 
     fn init(&mut self, ctx: &mut RetroBlitContext) {
+        ctx.hide_cursor();
+
         let mut offset = 0;
         let total_colors = self.last_palette.len() * 7;
         let darkest_blue = self.last_palette[DARKEST_BLUE_IDX];
@@ -1255,8 +1498,15 @@ impl ContextHandler for App {
     fn update(&mut self, ctx: &mut RetroBlitContext, dt: f32) {
         self.update_palette(ctx, dt);
         self.update_castings(dt);
+        self.update_projectiles(dt);
+        self.update_freeze_spell_blasts();
+        self.update_periodic_statuses::<FreezeStun>(dt);
+        self.update_periodic_statuses::<DamageTint>(dt);
+        self.update_periodic_statuses::<MonsterCorpseGhost>(dt);
+        self.update_periodic_statuses::<Particle>(dt);
         self.update_input(ctx, dt);
         self.update_blackboard();
+        self.maintain_monster_hp();
         self.update_spatial_partition();
         self.update_ai(ctx, dt);
         self.update_pickups(ctx);

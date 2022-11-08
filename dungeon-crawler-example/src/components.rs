@@ -1,8 +1,17 @@
 use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
+use std::ops::{Deref, DerefMut};
 use flat_spatial::grid::GridHandle;
 use glam::{Vec2, vec2};
-use hecs::Entity;
+use hecs::{CommandBuffer, Entity};
+use rand::{Rng, thread_rng};
+
+#[derive(Copy, Clone)]
+pub struct Projectile<TCast: CastInfo, TProjectileBehaviour: ProjectileBehaviour<TCast>>{
+    pub caster: Entity,
+    pub behaviour: TProjectileBehaviour,
+    pub(crate) _phantom_data: PhantomData<TCast>
+}
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub struct SpatialHandle {
@@ -68,10 +77,10 @@ impl Monster {
 
     pub(crate) fn hit_distance(&self) -> f32 {
         match self {
-            Monster::Toad => 54.0,
-            Monster::Kobold => 45.0,
-            Monster::Rat => 32.0,
-            Monster::Skeleton => 50.0,
+            Monster::Toad => 62.0,
+            Monster::Kobold => 56.0,
+            Monster::Rat => 50.0,
+            Monster::Skeleton => 60.0,
         }
     }
 
@@ -85,7 +94,7 @@ impl Monster {
     }
 }
 
-pub trait CastInfo: Copy + Send + Sync {
+pub trait CastInfo: Copy + Send + Sync + 'static {
     fn cool_down_duration() -> f32;
     fn cast_duration() -> f32;
 }
@@ -98,11 +107,16 @@ pub enum CastState<TCast: CastInfo> {
     CoolDown { t: f32 }
 }
 
-pub trait CastStateImpl<TCast: CastInfo>: Copy + Sync + Send {
+pub trait CastStateImpl<TCast: CastInfo>: Copy + Sync + Send + 'static {
     fn new() -> Self;
     fn update(&mut self, dt: f32) -> bool;
     fn try_cast(&mut self) -> bool;
     fn get_anim_info(self) -> Self;
+}
+
+pub trait ProjectileBehaviour<TCast: CastInfo>: Copy + Sync + Send + 'static {
+    fn collide(position: Position, cast: TCast, cb: &mut CommandBuffer);
+    fn make_particle(x: f32, y: f32) -> Particle;
 }
 
 impl<TCast: CastInfo> CastStateImpl<TCast> for CastState<TCast> {
@@ -186,6 +200,129 @@ pub type MeleeCastState = CastState<MeleeCast>;
 pub struct FreezeSpellCast {
     pub duration: f32,
     pub blast_range: f32,
+}
+
+pub struct FreezeSpellBlast;
+
+pub trait PeriodicStatus: Copy + Send + Sync + 'static {
+    fn update(&mut self, dt: f32) -> bool;
+    fn on_status_off(e: Entity, cb: &mut CommandBuffer) {
+        cb.remove::<(Self,)>(e);
+    }
+}
+
+macro_rules! derive_periodic_status(
+    ($status_type:ident) => {
+        impl PeriodicStatus for $status_type{
+            fn update(&mut self, dt: f32) -> bool {
+                let v: &mut f32 = self.deref_mut();
+                if *v <= 0.0 {
+                    false
+                } else {
+                    *v -= dt;
+                    true
+                }
+            }
+        }
+
+        impl Deref for $status_type {
+            type Target = f32;
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
+        }
+
+        impl DerefMut for $status_type {
+            fn deref_mut(&mut self) -> &mut Self::Target {
+                &mut self.0
+            }
+        }
+    }
+);
+
+#[derive(Copy, Clone)]
+pub struct FreezeStun(pub f32);
+
+derive_periodic_status!(FreezeStun);
+
+#[derive(Copy, Clone)]
+pub struct DamageTint(pub f32);
+
+derive_periodic_status!(DamageTint);
+
+#[derive(Copy, Clone)]
+pub struct MonsterCorpseGhost {
+    pub monster: Monster,
+    pub life_time: f32,
+    pub frozen: bool
+}
+
+impl PeriodicStatus for MonsterCorpseGhost {
+    fn update(&mut self, dt: f32) -> bool {
+        self.life_time -= dt;
+        self.life_time > 0.0
+    }
+    fn on_status_off(e: Entity, cb: &mut CommandBuffer) {
+        cb.despawn(e);
+    }
+}
+
+#[derive(Copy, Clone)]
+pub struct Particle {
+    pub color_id: u8,
+    pub life_time: f32,
+    pub x: f32,
+    pub y: f32,
+    pub h: f32,
+    pub velocity_x: f32,
+    pub velocity_y: f32,
+    pub velocity_h: f32
+}
+
+impl PeriodicStatus for Particle {
+    fn update(&mut self, dt: f32) -> bool {
+        self.life_time -= dt;
+        if self.life_time <= 0.0 {
+            false
+        } else {
+            self.x += self.velocity_x * dt;
+            self.y += self.velocity_y * dt;
+            self.h += self.velocity_h * dt;
+            true
+        }
+    }
+    fn on_status_off(e: Entity, cb: &mut CommandBuffer) {
+        cb.despawn(e);
+    }
+}
+
+#[derive(Copy, Clone)]
+pub struct FreezeSpellProjectile;
+
+impl ProjectileBehaviour<FreezeSpellCast> for FreezeSpellProjectile {
+    fn collide(position: Position, cast: FreezeSpellCast, cb: &mut CommandBuffer) {
+        cb.spawn(
+            (
+                FreezeSpellBlast,
+                position,
+                cast
+            )
+        );
+    }
+
+    fn make_particle(x: f32, y: f32) -> Particle {
+        let mut rng = thread_rng();
+        Particle {
+            color_id: 35,
+            life_time: 0.6,
+            x: x + rng.gen_range(-3.0..=3.0),
+            y: y + rng.gen_range(-3.0..=3.0),
+            h: - 12.0 + rng.gen_range(-3.0..=3.0),
+            velocity_x: rng.gen_range(-3.0..=3.0),
+            velocity_y: rng.gen_range(-3.0..=3.0),
+            velocity_h: rng.gen_range(-3.0..=3.0)
+        }
+    }
 }
 
 impl CastInfo for FreezeSpellCast {

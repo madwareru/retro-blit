@@ -1,4 +1,4 @@
-use jfa_cpu::MatrixJfa;
+use jfa_cpu::{MatrixJfa, Wrapping};
 use retro_blit::rendering::blittable::{BufferProvider, BufferProviderMut};
 use retro_blit::rendering::BlittableSurface;
 use retro_blit::utility::StopWatch;
@@ -46,7 +46,8 @@ impl ContextHandler for App {
                             } else {
                                 Some((i, j))
                             }
-                        })
+                        }),
+                    Wrapping::Clamp
                 );
                 voronoi_jfa
                     .iter()
@@ -79,7 +80,8 @@ impl ContextHandler for App {
                                 } else {
                                     Some((i, j))
                                 }
-                            })
+                            }),
+                        Wrapping::Clamp
                     );
 
                     for (idx, &nearest_coord) in jfa.iter().enumerate() {

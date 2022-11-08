@@ -1,7 +1,7 @@
 use glam::{vec2};
 use rand::{Rng, thread_rng};
 use retro_blit::window::RetroBlitContext;
-use crate::{App, CollisionTag, HP, Monster, PaletteState, Player, Position};
+use crate::{App, CollisionTag, FreezeStun, HP, Monster, MonsterCorpseGhost, PaletteState, Player, Position};
 use crate::components::{DesiredVelocity, SpatialHandle};
 
 pub struct Blackboard {
@@ -50,6 +50,30 @@ pub enum MobState {
 }
 
 impl App {
+    pub(crate) fn maintain_monster_hp(&mut self) {
+        let spatial = &mut self.spatial_map;
+        let cb = &mut self.command_buffer;
+
+        for (e, (monster, pos, hp, sp_handle)) in self.world.query::<(&Monster, &Position, &HP, &SpatialHandle)>().iter() {
+            if hp.0 == 0 {
+                spatial.remove(sp_handle.handle);
+                cb.spawn(
+                    (
+                        MonsterCorpseGhost {
+                            monster: *monster,
+                            life_time: 1.0,
+                            frozen: self.world.get::<FreezeStun>(e).is_ok()
+                        },
+                        *pos
+                    )
+                );
+                cb.despawn(e);
+            }
+        }
+
+        cb.run_on(&mut self.world);
+    }
+
     pub(crate) fn update_blackboard(&mut self) {
         if let Some((_, (_, position))) = self.world.query::<(&Player, &Position)>().iter().next() {
             self.blackboard.player_position = *position;
@@ -91,7 +115,10 @@ impl App {
 
         let mut damage = 0;
 
-        for (_, data) in self.world.query::<(&Monster, &mut Position, &mut DesiredVelocity, &mut MobState)>().iter() {
+        for (_, data) in self.world.query::<(&Monster, &mut Position, &mut DesiredVelocity, &mut MobState)>()
+            .iter()
+            .filter(|(e, _)| self.world.get::<FreezeStun>(*e).is_err())
+        {
             let (monster, pos, desired_velocity, state) = data;
             let p: glam::Vec2 = (*pos).into();
 
@@ -195,8 +222,8 @@ impl App {
                                                 y: p.y
                                             },
                                             end_position: Position {
-                                                x: p.x + delta.x * 24.0,
-                                                y: p.y + delta.y * 24.0
+                                                x: p.x + delta.x * 12.0,
+                                                y: p.y + delta.y * 12.0
                                             },
                                             t: 0.0
                                         }
@@ -263,14 +290,18 @@ impl App {
             }
         }
 
-        for (_, (monster, pos, desired_velocity)) in self.world.query::<(&Monster, &mut Position, &mut DesiredVelocity)>().iter() {
+        for (_, (monster, pos, desired_velocity)) in self.world.query::<(&Monster, &mut Position, &mut DesiredVelocity)>()
+            .iter()
+            .filter(|(e, _)| self.world.get::<FreezeStun>(*e).is_err())
+        {
             self.with_wang_data(|wang_data|{
-                *pos = super::collision::move_position_towards(
+                let (new_pos, _) = super::collision::move_position_towards(
                     *pos,
                     vec2(desired_velocity.x * monster.speed() * dt, desired_velocity.y * monster.speed() * dt),
                     CollisionTag::All,
                     wang_data
                 );
+                *pos = new_pos;
             })
         }
     }

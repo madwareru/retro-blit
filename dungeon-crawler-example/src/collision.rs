@@ -457,7 +457,7 @@ pub fn move_position_towards(
     direction: glam::Vec2,
     collision_tag: CollisionTag,
     terrain_tiles_data: &WangTerrain
-) -> Position {
+) -> (Position, bool) {
     let mut distance_to_go = direction.length();
     let mut current_dir = direction.normalize_or_zero();
     let mut current_pos = glam::vec2(pos.x, pos.y);
@@ -465,6 +465,8 @@ pub fn move_position_towards(
     let mut collision_vec = CollisionVec::new();
     let mut ii = (pos.x / 64.0) as usize;
     let mut jj = (pos.y / 64.0) as usize;
+
+    let mut collided = false;
 
     populate_collisions_data(&mut collision_vec, ii, jj, &terrain_tiles_data);
 
@@ -498,6 +500,7 @@ pub fn move_position_towards(
                 0.0
             },
             Some((direct_distance, normal)) => {
+                collided = true;
                 let rest_distance = distance_to_go - direct_distance;
                 current_pos += current_dir * direct_distance;
 
@@ -515,10 +518,7 @@ pub fn move_position_towards(
         }
     }
 
-    Position {
-        x: current_pos.x,
-        y: current_pos.y
-    }
+    (Position { x: current_pos.x, y: current_pos.y }, collided)
 }
 
 pub fn populate_collisions_data_from_position(

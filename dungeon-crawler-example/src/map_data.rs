@@ -196,7 +196,7 @@ impl MapData {
             FreezeSpellCastState::new(),
             MeleeCast {
                 cast_angle: 45.0f32.to_radians(),
-                cast_distance: 48.0,
+                cast_distance: 64.0,
                 cast_damage: 10
             },
             MeleeCastState::new()
