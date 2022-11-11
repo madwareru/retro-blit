@@ -6,7 +6,7 @@ use hecs::Entity;
 use retro_blit::rendering::blittable::BufferProvider;
 use crate::ai::MobState;
 use crate::components::{Angle, DesiredVelocity, FreezeSpellCastState, HP, MeleeCastState, MP, Player, Position, SpatialHandle, WangHeightMapEntry, WangTerrain, WangTerrainEntry};
-use crate::{CastStateImpl, FreezeSpellCast, MeleeCast};
+use crate::{CastStateImpl, FreezeSpellCast, MeleeCast, MovementInertial};
 
 #[derive(Copy, Clone, PartialEq)]
 pub enum HeightMapEntry { Water, Floor, Wall }
@@ -186,6 +186,7 @@ impl MapData {
         world.spawn((
             Player,
             player_position,
+            MovementInertial {x: 0.0, y: 0.0},
             HP(100),
             MP(100),
             Angle(0.0),

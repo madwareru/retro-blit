@@ -370,6 +370,11 @@ pub struct WangTerrainEntry {
 }
 
 #[derive(Copy, Clone, PartialEq)]
+pub struct MovementInertial {
+    pub x: f32, pub y: f32,
+}
+
+#[derive(Copy, Clone, PartialEq)]
 pub struct Position {
     pub x: f32, pub y: f32,
 }

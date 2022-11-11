@@ -60,6 +60,11 @@ pub struct AppFlags {
     pub dim_level: DimLevel,
 }
 
+pub struct HandWaveSate {
+    amount: f32,
+    t: f32
+}
+
 pub enum PaletteState {
     ScrollingWater,
     HpPickupTint { t: f32 },
@@ -81,14 +86,13 @@ pub struct App {
     world: World,
     command_buffer: CommandBuffer,
     palette_state: PaletteState,
-    bump_allocator: bumpalo::Bump,
     spatial_map: flat_spatial::DenseGrid<Entity>,
+    hand_wave_state: HandWaveSate
 }
 
 fn cast_melee(
     world: &World,
     command_buffer: &mut CommandBuffer,
-    _bump_allocator: &bumpalo::Bump,
     spatial_map: &mut flat_spatial::DenseGrid<Entity>,
     cast: MeleeCast,
     caster: Entity,
@@ -136,7 +140,6 @@ fn do_damage(entity: Entity, world: &World, hp: &mut HP, damage: i32, cb: &mut C
 fn cast_freeze_spell(
     _world: &World,
     command_buffer: &mut CommandBuffer,
-    _bump_allocator: &bumpalo::Bump,
     _spatial_map: &mut flat_spatial::DenseGrid<Entity>,
     cast: FreezeSpellCast,
     caster: Entity,
@@ -265,8 +268,11 @@ impl App {
             world,
             command_buffer: CommandBuffer::new(),
             palette_state: PaletteState::ScrollingWater,
-            bump_allocator: bumpalo::Bump::new(),
-            spatial_map
+            spatial_map,
+            hand_wave_state: HandWaveSate {
+                amount: 0.0,
+                t: 0.0
+            }
         }
     }
 
@@ -417,7 +423,7 @@ impl App {
                             uv_bottom.1 * (1.0 - t) + uv_up.1 * t,
                         );
                         let cell_coord = (point.0 / 64.0, point.1 / 64.0);
-                        let cell_remainder = (cell_coord.0.fract(), cell_coord.1.fract());
+                        let remainder = (cell_coord.0.fract(), cell_coord.1.fract());
                         let cell_coord = (cell_coord.0 as i32, cell_coord.1 as i32);
 
                         let dual_cell_coord = ((point.0 + 32.0) / 64.0, (point.1 + 32.0) / 64.0);
@@ -453,140 +459,34 @@ impl App {
                             },
                         });
 
-                        let water_pix = self.graphics.get_buffer()[
-                            (cell_remainder.0 * 24.0) as usize +
-                                self.graphics.get_width() * (72 + (cell_remainder.1 * 24.0) as usize)
-                            ];
+                        let stride = self.graphics.get_width() * (72 + (remainder.1 * 24.0) as usize);
 
-                        let floor_pix = if self.flags.texture_terrain {
-                            // self.terrain_tex[(cell_remainder.0 * 24.0) as usize +
-                            //     24 * ((cell_remainder.1 * 24.0) as usize)
-                            // ]
-                            self.graphics.get_buffer()[
-                                (cell_remainder.0 * 24.0) as usize + 24 +
-                                    self.graphics.get_width() * (72 + (cell_remainder.1 * 24.0) as usize)
-                                ]
-                        } else {
-                            17
+                        let water_pix = *unsafe{
+                            self
+                                .graphics
+                                .get_buffer()
+                                .get_unchecked(stride + (remainder.0 * 24.0) as usize)
+                        };
+                        let floor_pix = *unsafe{
+                            self
+                                .graphics
+                                .get_buffer()
+                                .get_unchecked(stride + (remainder.0 * 24.0) as usize + 24)
                         };
 
-                        let terrain_h = self.terrain_tiles.sample_tile(
-                            TileInfo::Terrain(wang_terrain_entry.terrain_id),
-                            cell_remainder.0,
-                            cell_remainder.1,
+                        let (terrain_bottom, terrain_top) = self.fetch_terrain(
+                            wang_terrain,
+                            remainder,
+                            dual_cell_remainder,
+                            dual_cell_coord,
+                            dual_in_range,
+                            wang_terrain_entry
                         );
-
-                        let mut terrain_bottom = terrain_h;
-                        {
-                            let mut wang_id = 0;
-                            if wang_terrain_entry.bottom.north_east == HeightMapEntry::Wall {
-                                wang_id += 0b0001;
-                            }
-                            if wang_terrain_entry.bottom.north_west == HeightMapEntry::Wall {
-                                wang_id += 0b0010;
-                            }
-                            if wang_terrain_entry.bottom.south_east == HeightMapEntry::Wall {
-                                wang_id += 0b0100;
-                            }
-                            if wang_terrain_entry.bottom.south_west == HeightMapEntry::Wall {
-                                wang_id += 0b1000;
-                            }
-                            terrain_bottom += (1.0 - terrain_bottom) *
-                                self.terrain_tiles.sample_tile(
-                                    TileInfo::Wang(wang_id),
-                                    cell_remainder.0,
-                                    cell_remainder.1,
-                                );
-
-                            wang_id = 0;
-                            if wang_terrain_entry.bottom.north_east == HeightMapEntry::Water {
-                                wang_id += 0b0001;
-                            }
-                            if wang_terrain_entry.bottom.north_west == HeightMapEntry::Water {
-                                wang_id += 0b0010;
-                            }
-                            if wang_terrain_entry.bottom.south_east == HeightMapEntry::Water {
-                                wang_id += 0b0100;
-                            }
-                            if wang_terrain_entry.bottom.south_west == HeightMapEntry::Water {
-                                wang_id += 0b1000;
-                            }
-                            terrain_bottom += -terrain_bottom *
-                                self.terrain_tiles.sample_tile(
-                                    TileInfo::Wang(wang_id),
-                                    cell_remainder.0,
-                                    cell_remainder.1,
-                                );
-                        }
-                        if dual_in_range {
-                            if let Some(TerrainProp::Stalagmite) = wang_terrain.props.get(&[dual_cell_coord.0 as u16, dual_cell_coord.1 as u16]) {
-                                terrain_bottom = utils::lerp(
-                                    terrain_bottom,
-                                    if terrain_bottom < 0.3 { 0.4 } else { 0.75 },
-                                    self.terrain_tiles.sample_tile(
-                                        TileInfo::Stalagmite,
-                                        dual_cell_remainder.0,
-                                        dual_cell_remainder.1,
-                                    ));
-                            }
-                        }
-
-                        let mut terrain_top = terrain_h - 0.2;
-                        {
-                            let mut wang_id = 0;
-                            if wang_terrain_entry.top.north_east == HeightMapEntry::Wall {
-                                wang_id += 0b0001;
-                            }
-                            if wang_terrain_entry.top.north_west == HeightMapEntry::Wall {
-                                wang_id += 0b0010;
-                            }
-                            if wang_terrain_entry.top.south_east == HeightMapEntry::Wall {
-                                wang_id += 0b0100;
-                            }
-                            if wang_terrain_entry.top.south_west == HeightMapEntry::Wall {
-                                wang_id += 0b1000;
-                            }
-                            terrain_top += (1.0 - terrain_top) *
-                                self.terrain_tiles.sample_tile(
-                                    TileInfo::Wang(wang_id),
-                                    cell_remainder.0,
-                                    cell_remainder.1,
-                                );
-
-                            wang_id = 0;
-                            if wang_terrain_entry.top.north_east == HeightMapEntry::Water {
-                                wang_id += 0b0001;
-                            }
-                            if wang_terrain_entry.top.north_west == HeightMapEntry::Water {
-                                wang_id += 0b0010;
-                            }
-                            if wang_terrain_entry.top.south_east == HeightMapEntry::Water {
-                                wang_id += 0b0100;
-                            }
-                            if wang_terrain_entry.top.south_west == HeightMapEntry::Water {
-                                wang_id += 0b1000;
-                            }
-                            terrain_top += -terrain_top *
-                                self.terrain_tiles.sample_tile(
-                                    TileInfo::Wang(wang_id),
-                                    cell_remainder.0,
-                                    cell_remainder.1,
-                                );
-                        }
-                        if dual_in_range {
-                            if let Some(TerrainProp::Stalactite) = wang_terrain.props.get(&[dual_cell_coord.0 as u16, dual_cell_coord.1 as u16]) {
-                                terrain_top = utils::lerp(terrain_top, 0.55, self.terrain_tiles.sample_tile(
-                                    TileInfo::Stalactite,
-                                    dual_cell_remainder.0,
-                                    dual_cell_remainder.1,
-                                ));
-                            }
-                        }
 
                         { // render_bottom
                             if terrain_bottom > 0.25 {
                                 let h = -64.0 + 128.0 * (terrain_bottom - 0.3);
-                                let h = 48.0 + h * Self::scale_y(t, self.flags.fov_slope);
+                                let h = self.project_height(h, t);
 
                                 let h = h.clamp(0.0, 96.0) as usize;
                                 if h > max_h {
@@ -602,7 +502,7 @@ impl App {
                                 }
                             } else {
                                 let h = -64.0 + 128.0 * (-0.05);
-                                let h = 48.0 + h * Self::scale_y(t, self.flags.fov_slope);
+                                let h = self.project_height(h, t);
 
                                 let h = h.clamp(0.0, 96.0) as usize;
                                 if h > max_h {
@@ -621,7 +521,7 @@ impl App {
 
                         { // render top
                             let h = -64.0 + 128.0 * terrain_top;
-                            let h = 48.0 + h * Self::scale_y(t, self.flags.fov_slope);
+                            let h = self.project_height(h, t);
 
                             let h = 96 - h.clamp(0.0, 96.0) as usize;
                             if h < max_h_top {
@@ -645,12 +545,142 @@ impl App {
     }
 
     #[inline(always)]
+    fn project_height(&self, h: f32, depth: f32) -> f32 {
+        48.0 + h * Self::scale_y(depth, self.flags.fov_slope)
+    }
+
+    fn fetch_terrain(
+        &self,
+        wang_terrain: &WangTerrain,
+        remainder: (f32, f32),
+        dual_cell_remainder: (f32, f32),
+        dual_cell_coord: (i32, i32),
+        dual_in_range: bool,
+        wang_terrain_entry: WangTerrainEntry
+    ) -> (f32, f32) {
+        let terrain_detail_height = self.terrain_tiles.sample_tile(
+            TileInfo::Terrain(wang_terrain_entry.terrain_id),
+            remainder.0,
+            remainder.1,
+        );
+
+        let mut terrain_bottom = terrain_detail_height;
+        {
+            let mut wang_id = 0;
+            if wang_terrain_entry.bottom.north_east == HeightMapEntry::Wall {
+                wang_id += 0b0001;
+            }
+            if wang_terrain_entry.bottom.north_west == HeightMapEntry::Wall {
+                wang_id += 0b0010;
+            }
+            if wang_terrain_entry.bottom.south_east == HeightMapEntry::Wall {
+                wang_id += 0b0100;
+            }
+            if wang_terrain_entry.bottom.south_west == HeightMapEntry::Wall {
+                wang_id += 0b1000;
+            }
+            terrain_bottom += (1.0 - terrain_bottom) *
+                self.terrain_tiles.sample_tile(
+                    TileInfo::Wang(wang_id),
+                    remainder.0,
+                    remainder.1,
+                );
+
+            wang_id = 0;
+            if wang_terrain_entry.bottom.north_east == HeightMapEntry::Water {
+                wang_id += 0b0001;
+            }
+            if wang_terrain_entry.bottom.north_west == HeightMapEntry::Water {
+                wang_id += 0b0010;
+            }
+            if wang_terrain_entry.bottom.south_east == HeightMapEntry::Water {
+                wang_id += 0b0100;
+            }
+            if wang_terrain_entry.bottom.south_west == HeightMapEntry::Water {
+                wang_id += 0b1000;
+            }
+            terrain_bottom += -terrain_bottom *
+                self.terrain_tiles.sample_tile(
+                    TileInfo::Wang(wang_id),
+                    remainder.0,
+                    remainder.1,
+                );
+        }
+        if dual_in_range {
+            if let Some(TerrainProp::Stalagmite) = wang_terrain.props.get(&[dual_cell_coord.0 as u16, dual_cell_coord.1 as u16]) {
+                terrain_bottom = utils::lerp(
+                    terrain_bottom,
+                    if terrain_bottom < 0.3 { 0.4 } else { 0.75 },
+                    self.terrain_tiles.sample_tile(
+                        TileInfo::Stalagmite,
+                        dual_cell_remainder.0,
+                        dual_cell_remainder.1,
+                    ));
+            }
+        }
+
+        let mut terrain_top = terrain_detail_height - 0.2;
+        {
+            let mut wang_id = 0;
+            if wang_terrain_entry.top.north_east == HeightMapEntry::Wall {
+                wang_id += 0b0001;
+            }
+            if wang_terrain_entry.top.north_west == HeightMapEntry::Wall {
+                wang_id += 0b0010;
+            }
+            if wang_terrain_entry.top.south_east == HeightMapEntry::Wall {
+                wang_id += 0b0100;
+            }
+            if wang_terrain_entry.top.south_west == HeightMapEntry::Wall {
+                wang_id += 0b1000;
+            }
+            terrain_top += (1.0 - terrain_top) *
+                self.terrain_tiles.sample_tile(
+                    TileInfo::Wang(wang_id),
+                    remainder.0,
+                    remainder.1,
+                );
+
+            wang_id = 0;
+            if wang_terrain_entry.top.north_east == HeightMapEntry::Water {
+                wang_id += 0b0001;
+            }
+            if wang_terrain_entry.top.north_west == HeightMapEntry::Water {
+                wang_id += 0b0010;
+            }
+            if wang_terrain_entry.top.south_east == HeightMapEntry::Water {
+                wang_id += 0b0100;
+            }
+            if wang_terrain_entry.top.south_west == HeightMapEntry::Water {
+                wang_id += 0b1000;
+            }
+            terrain_top += -terrain_top *
+                self.terrain_tiles.sample_tile(
+                    TileInfo::Wang(wang_id),
+                    remainder.0,
+                    remainder.1,
+                );
+        }
+        if dual_in_range {
+            if let Some(TerrainProp::Stalactite) = wang_terrain.props.get(&[dual_cell_coord.0 as u16, dual_cell_coord.1 as u16]) {
+                terrain_top = utils::lerp(terrain_top, 0.55, self.terrain_tiles.sample_tile(
+                    TileInfo::Stalactite,
+                    dual_cell_remainder.0,
+                    dual_cell_remainder.1,
+                ));
+            }
+        }
+
+        (terrain_bottom, terrain_top)
+    }
+
+    #[inline(always)]
     fn scale_y(t: f32, fov_slope: f32) -> f32 {
         let corr = utils::lerp(NEAR, FAR, t);
         1.0 / (corr * fov_slope / PIXELS_PER_METER)
     }
 
-    fn render_hands(&self, ctx: &mut RetroBlitContext) {
+    fn render_hands(&mut self, ctx: &mut RetroBlitContext) {
         let (spell, sword);
 
         if let Some((_, (_, sp, sw))) = self.world.query::<(
@@ -668,27 +698,47 @@ impl App {
             .graphics
             .with_color_key(0);
 
+        let (movement_amount, hand_wave_t) = (self.hand_wave_state.amount.min(1.0), self.hand_wave_state.t);
+
+        let spell_arm_x_anim = movement_amount * hand_wave_t.sin() * 4.0;
+        let spell_arm_y_anim = movement_amount * (hand_wave_t * 2.0).sin() * 4.0;
+
+        let sword_arm_x_anim = movement_amount * -(hand_wave_t + 0.35).cos() * 4.0;
+        let sword_arm_y_anim = movement_amount * ((hand_wave_t + 0.35) * 2.0).cos() * 4.0;
+
         let (spell_arm_x, spell_arm_y) = match spell {
             CastState::PreCast { t } => {
-                (4 + (24.0 * t) as i16, 96 - 36 - (8.0 * t) as i16)
+                (
+                    4 + (24.0 * t) as i16 + (spell_arm_x_anim * (1.0 - t)) as i16,
+                    96 - 30 - (14.0 * t) as i16 + (spell_arm_y_anim * (1.0 - t)) as i16
+                )
             },
             CastState::Cast { t } => {
-                (4 + (24.0 * (1.0 - t)) as i16, 96 - 36 - (8.0 * (1.0 - t)) as i16)
+                (
+                    4 + (24.0 * (1.0 - t)) as i16 + (spell_arm_x_anim * t) as i16,
+                    96 - 30 - (14.0 * (1.0 - t)) as i16 + (spell_arm_y_anim * t) as i16
+                )
             },
             _ => {
-                (4, 96 - 36)
+                (4 + spell_arm_x_anim as i16, 96 - 30 + spell_arm_y_anim as i16)
             }
         };
 
         let (sword_arm_x, sword_arm_y) = match sword {
             CastState::PreCast { t } => {
-                (160-52 - (24.0 * t) as i16, 96 - 36 - (8.0 * t) as i16)
+                (
+                    160-52 - (24.0 * t) as i16 + (sword_arm_x_anim * (1.0 - t)) as i16,
+                    96 - 30 - (14.0 * t) as i16 + (sword_arm_y_anim * (1.0 - t)) as i16
+                )
             },
             CastState::Cast { t } => {
-                (160-52 - (24.0 * (1.0 - t)) as i16, 96 - 36 - (8.0 * (1.0 - t)) as i16)
+                (
+                    160-52 - (24.0 * (1.0 - t)) as i16 + (sword_arm_x_anim * t) as i16,
+                    96 - 30 - (14.0 * (1.0 - t)) as i16 + (sword_arm_y_anim * t) as i16
+                )
             },
             _ => {
-                (160-52, 96 - 36)
+                (160-52 + sword_arm_x_anim as i16, 96 - 30 + sword_arm_y_anim as i16)
             }
         };
 
@@ -865,20 +915,17 @@ Esc: Quit game"##,
     fn update_castings(&mut self, dt: f32) {
         let spatial = &mut self.spatial_map;
         let cb = &mut self.command_buffer;
-        let allocator = &self.bump_allocator;
         let world = &self.world;
 
         fn do_work<TCastState, TState>
         (
             spatial_map: &mut flat_spatial::DenseGrid<Entity>,
             cb: &mut CommandBuffer,
-            allocator: &bumpalo::Bump,
             world: &World,
             dt: f32,
             foo: impl Fn(
                 &World,
                 &mut CommandBuffer,
-                &bumpalo::Bump,
                 &mut flat_spatial::DenseGrid<Entity>,
                 TState,
                 Entity,
@@ -894,19 +941,19 @@ Esc: Quit game"##,
                 .query::<(&mut TCastState, &Position, &Angle, &TState)>()
                 .iter() {
                 if cast_state.update(dt) {
-                    foo(world, cb, allocator, spatial_map, *cast, e, *pos, *ang);
+                    foo(world, cb, spatial_map, *cast, e, *pos, *ang);
                 }
             }
         }
 
-        do_work::<FreezeSpellCastState, _>(spatial, cb, allocator, world, dt, cast_freeze_spell);
-        do_work::<MeleeCastState, _>(spatial, cb, allocator, world, dt, cast_melee);
+        do_work::<FreezeSpellCastState, _>(spatial, cb, world, dt, cast_freeze_spell);
+        do_work::<MeleeCastState, _>(spatial, cb, world, dt, cast_melee);
 
         self.command_buffer.run_on(&mut self.world)
     }
 
     fn update_player_movement(&mut self, ctx: &mut RetroBlitContext, dt: f32) {
-        let (strafe_speed, turn_speed) = match (ctx.is_key_pressed(KeyCode::Left), ctx.is_key_pressed(KeyCode::Right)) {
+        let (strafe_speed, turn_speed): (f32, f32) = match (ctx.is_key_pressed(KeyCode::Left), ctx.is_key_pressed(KeyCode::Right)) {
             (true, false) => {
                 if ctx.is_key_mod_pressed(KeyMod::Option) {
                     (180.0, 0.0)
@@ -924,7 +971,7 @@ Esc: Quit game"##,
             _ => (0.0, 0.0)
         };
 
-        let movement_speed = match (ctx.is_key_pressed(KeyCode::Down), ctx.is_key_pressed(KeyCode::Up)) {
+        let movement_speed: f32 = match (ctx.is_key_pressed(KeyCode::Down), ctx.is_key_pressed(KeyCode::Up)) {
             (true, false) => {
                 -180.0
             }
@@ -934,18 +981,51 @@ Esc: Quit game"##,
             _ => 0.0
         };
 
-        if let Some((_, player_data)) = self.world.query::<(&mut Player, &mut Position, &mut Angle)>().iter().next() {
-            let (_, pos, angle) = player_data;
+        let should_move = strafe_speed.abs() > 10.0 || movement_speed.abs() > 10.0;
+
+        if let Some((_, player_data)) = self.world.query::<(&mut Player, &mut Position, &mut Angle, &mut MovementInertial)>().iter().next() {
+            let (_, pos, angle, movement_inertial) = player_data;
             angle.0 += turn_speed * dt;
             let angle = angle.0.to_radians();
-            let (s, c) = (angle.sin() * dt, angle.cos() * dt);
-            let speed_x = movement_speed * s - strafe_speed * c;
-            let speed_y = -movement_speed * c - strafe_speed * s;
+            let (s, c) = (angle.sin(), angle.cos());
+
+            if should_move {
+                let speed_x = movement_speed * s - strafe_speed * c;
+                let speed_y = -movement_speed * c - strafe_speed * s;
+                movement_inertial.x = if speed_x > 0.0 {
+                    (movement_inertial.x + speed_x * dt * 5.0).min(speed_x)
+                } else {
+                    (movement_inertial.x + speed_x * dt * 5.0).max(speed_x)
+                };
+                movement_inertial.y = if speed_y > 0.0 {
+                    (movement_inertial.y + speed_y * dt * 5.0).min(speed_y)
+                } else {
+                    (movement_inertial.y + speed_y * dt * 5.0).max(speed_y)
+                };
+            } else {
+                movement_inertial.x -= movement_inertial.x * dt * 5.0;
+                movement_inertial.y -= movement_inertial.y * dt * 5.0;
+                if movement_inertial.x.abs() < 0.01 {
+                    movement_inertial.x = 0.0;
+                }
+                if movement_inertial.y.abs() < 0.01 {
+                    movement_inertial.y = 0.0;
+                }
+            }
+
+            const SPEED_COEFF: f32 = 180.0 * 180.0;
+
+            self.hand_wave_state.amount = (
+                movement_inertial.x * movement_inertial.x +
+                movement_inertial.y * movement_inertial.y
+            ) / SPEED_COEFF;
+
+            self.hand_wave_state.t += self.hand_wave_state.amount * dt * 4.0;
 
             self.with_wang_data(|wang_data| {
                 let (new_pos, _) = collision::move_position_towards(
                     *pos,
-                    glam::vec2(speed_x, speed_y),
+                    glam::vec2(movement_inertial.x * dt, movement_inertial.y * dt),
                     CollisionTag::All,
                     wang_data,
                 );
@@ -1126,9 +1206,9 @@ Esc: Quit game"##,
                 let depth = (t - NEAR) / (FAR - NEAR);
                 let u = utils::dot(d_p, right) / t / self.flags.fov_slope;
 
-                let x_scale = 40.0 * Self::scale_y(depth, self.flags.fov_slope);
-                let up = 48.0 - 24.0 * Self::scale_y(depth, self.flags.fov_slope);
-                let down = 48.0 + 56.0 * Self::scale_y(depth, self.flags.fov_slope);
+                let x_scale = 40.0 * Self::scale_y(t, self.flags.fov_slope);
+                let up = self.project_height(-24.0, depth);
+                let down = self.project_height(56.0, depth);
 
                 let upper = (up).max(0.0) as usize;
                 let lower = (down).min(96.0) as usize;
@@ -1174,8 +1254,8 @@ Esc: Quit game"##,
                 let u = utils::dot(d_p, right) / t / self.flags.fov_slope;
 
                 let x_scale = 40.0 * Self::scale_y(depth, self.flags.fov_slope);
-                let up = 48.0 - 24.0 * Self::scale_y(depth, self.flags.fov_slope);
-                let down = 48.0 + 56.0 * Self::scale_y(depth, self.flags.fov_slope);
+                let up = self.project_height(-24.0, depth);
+                let down = self.project_height(56.0, depth);
 
                 let upper = (up).max(0.0) as usize;
                 let lower = (down).min(96.0) as usize;
@@ -1239,8 +1319,8 @@ Esc: Quit game"##,
                 let u = utils::dot(d_p, right) / t / self.flags.fov_slope;
 
                 let x_scale = 40.0 * Self::scale_y(depth, self.flags.fov_slope);
-                let up = 48.0 - 24.0 * Self::scale_y(depth, self.flags.fov_slope);
-                let down = 48.0 + 56.0 * Self::scale_y(depth, self.flags.fov_slope);
+                let up = self.project_height(-24.0, depth);
+                let down = self.project_height(56.0, depth);
 
                 let upper = (up).max(0.0) as usize;
                 let lower = (down).min(96.0) as usize;
@@ -1323,7 +1403,7 @@ Esc: Quit game"##,
                 let depth = (t - NEAR) / (FAR - NEAR);
                 let u = utils::dot(d_p, right) / t / self.flags.fov_slope;
 
-                let up = 48.0 - h * Self::scale_y(depth, self.flags.fov_slope);
+                let up = self.project_height(-h, depth);
 
                 let upper = (up).max(0.0) as usize;
 
