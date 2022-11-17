@@ -54,7 +54,7 @@ impl PathTessellator {
         }
 
         for vertex in self.buffers.vertices.iter() {
-            vertices_to_extend.push(Vertex { position: (vertex.x as i16, vertex.y as i16) })
+            vertices_to_extend.push(Vertex { position: (vertex.x, vertex.y) })
         }
         indices_to_extend.extend(self.buffers.indices.iter());
     }

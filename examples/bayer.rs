@@ -18,7 +18,7 @@ impl ContextHandler for App {
     }
 
     fn get_window_mode(&self) -> WindowMode {
-        WindowMode::Mode160x120
+        WindowMode::ModeX
     }
 
     fn init(&mut self, ctx: &mut RetroBlitContext) {

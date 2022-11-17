@@ -1,4 +1,5 @@
 pub mod collision_queries;
+pub mod bsp_3d;
 
 use glam::{Vec2, vec3a, Vec3A};
 

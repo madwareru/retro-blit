@@ -543,12 +543,14 @@ fn populate_collisions_data(
     for j in (if jj > 0 { jj - 1 } else { jj })..=(if jj < MapData::WIDTH - 2 { jj + 1 } else { jj }) {
         for i in (if ii > 0 { ii - 1 } else { ii })..=(if ii < MapData::WIDTH - 2 { ii + 1 } else { ii }) {
             let idx = j * (MapData::WIDTH - 1) + i;
-            populate_collisions(
-                collision_vec,
-                &terrain_tiles_data.tiles[idx],
-                i as f32 * 64.0,
-                j as f32 * 64.0
-            );
+            if (0..terrain_tiles_data.tiles.len()).contains(&idx) {
+                populate_collisions(
+                    collision_vec,
+                    &terrain_tiles_data.tiles[idx],
+                    i as f32 * 64.0,
+                    j as f32 * 64.0
+                );
+            }
         }
     }
 }

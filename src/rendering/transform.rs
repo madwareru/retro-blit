@@ -1,4 +1,4 @@
-use glam::{Mat3A, vec2};
+use glam::{Mat3A, vec2, vec3a};
 
 #[derive(Copy, Clone)]
 pub struct Transform {
@@ -106,6 +106,13 @@ impl Transform {
     pub fn set_translation(&mut self, translation: (i16, i16)) {
         self.translation = translation;
         self.actualize_matrix();
+    }
+
+    pub fn transform_positions(&self, positions: [(f32, f32); 3]) -> [(f32, f32); 3] {
+        positions.map(|it| {
+            let p = self.matrix * vec3a(it.0, it.1, 1.0);
+            (p.x, p.y)
+        })
     }
 }
 
