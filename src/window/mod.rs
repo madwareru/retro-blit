@@ -521,7 +521,7 @@ impl<CtxHandler: ContextHandler> ParametrizedEventHandler<CtxHandler> for Stage<
                 }
                 (mask_mesh, screen_mesh)
             },
-            WindowMode::Mode13Frameless | WindowMode::ModeXFrameless | WindowMode::Mode160x120 => (
+            WindowMode::Mode13Frameless | WindowMode::ModeXFrameless | WindowMode::Mode160x120 | WindowMode::Mode800x600 => (
                 Mesh::make_empty(),
                 Mesh::make_3x4()
             ),
@@ -1148,7 +1148,8 @@ pub enum WindowMode {
     Mode64x64,
     Mode128x128,
     Mode256x256,
-    Mode160x120
+    Mode160x120,
+    Mode800x600
 }
 impl WindowMode {
     fn get_render_texture_dimensions(&self) -> (usize, usize) {
@@ -1161,6 +1162,7 @@ impl WindowMode {
             WindowMode::Mode128x128 => (2048, 2048),
             WindowMode::Mode256x256 => (2048, 2048),
             WindowMode::Mode160x120 => (1600, 1200),
+            WindowMode::Mode800x600 => (1600, 1200)
         }
     }
 
@@ -1174,6 +1176,7 @@ impl WindowMode {
             WindowMode::Mode128x128 => (128, 128),
             WindowMode::Mode256x256 => (256, 256),
             WindowMode::Mode160x120 => (160, 120),
+            WindowMode::Mode800x600 => (800, 600)
         }
     }
 }
