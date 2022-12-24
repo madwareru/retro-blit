@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::time::Instant;
 use gl_pipelines::*;
-use gl_pipelines::window::{EventHandler, MouseButton, ParametrizedEventHandler, WindowContext};
+use gl_pipelines::window::{EventHandler, MouseButton, MouseWheelDirection, ParametrizedEventHandler, WindowContext};
 
 pub mod monitor_obj_loader;
 use monitor_obj_loader::Vec4;
@@ -277,6 +277,7 @@ impl TryFrom<gl_pipelines::window::KeyCode> for KeyCode {
 }
 
 pub struct RetroBlitContext {
+    egui: gl_pipelines::egui_integration::EguiMq,
     sound_driver: Option<SoundDriver>,
     buffer_width: usize,
     buffer_height: usize,
@@ -366,6 +367,22 @@ impl RetroBlitContext {
         }
     }
 
+    pub fn is_egui_wants_keyboard_input(&self) -> bool {
+        self.egui.egui_ctx().wants_keyboard_input()
+    }
+
+    pub fn is_egui_wants_pointer_input(&self) -> bool {
+        self.egui.egui_ctx().wants_pointer_input()
+    }
+
+    pub fn is_egui_area_under_pointer(&self) -> bool {
+        self.egui.egui_ctx().is_pointer_over_area()
+    }
+
+    pub fn get_egui_ctx(&self) -> egui::Context {
+        self.egui.egui_ctx().clone()
+    }
+
     pub fn is_key_mod_pressed(&self, key_mod: KeyMod) -> bool {
         match key_mod {
             KeyMod::Shift => self.key_mods_pressed.shift,
@@ -432,6 +449,7 @@ pub trait ContextHandler {
     fn on_key_up(&mut self, _ctx: &mut RetroBlitContext, _key_code: KeyCode, _key_mods: KeyMods){}
     fn init(&mut self, ctx: &mut RetroBlitContext);
     fn update(&mut self, ctx: &mut RetroBlitContext, dt: f32);
+    fn egui(&mut self, _ctx: &mut RetroBlitContext, _egui_ctx: egui::Context) {}
 }
 
 fn get_buffer_dimensions(handler: &impl ContextHandler) -> (usize, usize) {
@@ -614,6 +632,7 @@ impl<CtxHandler: ContextHandler> ParametrizedEventHandler<CtxHandler> for Stage<
         let (buffer_width, buffer_height) = get_buffer_dimensions(&handler);
 
         let mut context_data = RetroBlitContext {
+            egui: gl_pipelines::egui_integration::EguiMq::new(ctx),
             sound_driver: None,
             buffer_width,
             buffer_height,
@@ -791,7 +810,12 @@ impl<CtxHandler: ContextHandler> EventHandler for Stage<CtxHandler> {
         self.buffer_texture.update(ctx, &self.context_data.buffer_pixels);
     }
 
-    fn draw(&mut self, ctx: &mut Context, _win_ctx: &mut WindowContext) {
+    fn draw(&mut self, ctx: &mut Context, win_ctx: &mut WindowContext) {
+        self.context_data.egui.on_frame_start(ctx);
+        let egui_ctx = self.context_data.egui.egui_ctx().clone();
+        self.handler.egui(&mut self.context_data, egui_ctx);
+        self.context_data.egui.on_frame_end(win_ctx);
+
         { // render out color buffer into offscreen texture
             ctx.begin_pass(
                 self.offscreen_pass,
@@ -823,6 +847,8 @@ impl<CtxHandler: ContextHandler> EventHandler for Stage<CtxHandler> {
         }
         ctx.end_render_pass();
 
+        self.context_data.egui.draw(ctx);
+
         ctx.commit_frame();
     }
 
@@ -832,13 +858,22 @@ impl<CtxHandler: ContextHandler> EventHandler for Stage<CtxHandler> {
         x: i32, y: i32,
         _x_rel: i32, _y_rel: i32
     ) {
-        let screen_size = ctx.get_window_size();
-        let aspect = screen_size.0 as f32 / screen_size.1 as f32;
+        {
+            let screen_size = ctx.get_window_size();
+            let aspect = screen_size.0 as f32 / screen_size.1 as f32;
 
-        let x = (x as f32 / screen_size.0 as f32 - 0.5) * 2.0 * aspect;
-        let y = -((y as f32 / screen_size.1 as f32 - 0.5) * 2.0);
+            let x = (x as f32 / screen_size.0 as f32 - 0.5) * 2.0 * aspect;
+            let y = -((y as f32 / screen_size.1 as f32 - 0.5) * 2.0);
 
-        self.check_for_hit_test(x, y);
+            self.check_for_hit_test(x, y);
+        }
+        let dpi = ctx.get_dpi();
+        self.context_data.egui.mouse_motion_event(ctx, x as f32 * dpi.0, y as f32 * dpi.1);
+    }
+
+    fn mouse_wheel_event(&mut self, gfx_ctx: &mut Context, _win_ctx: &mut WindowContext, dx: i32, dy: i32, _direction: MouseWheelDirection) {
+        let dpi = gfx_ctx.get_dpi();
+        self.context_data.egui.mouse_wheel_event(gfx_ctx, dx as f32 * dpi.0, dy as f32 * dpi.1);
     }
 
     fn mouse_button_down_event(
@@ -847,13 +882,17 @@ impl<CtxHandler: ContextHandler> EventHandler for Stage<CtxHandler> {
         button: MouseButton, x: i32, y: i32,
         _clicks: u8
     ) {
-        self.mouse_motion_event(ctx, win_ctx, x as _, y as _, 0, 0);
-        match button {
-            MouseButton::Left => { self.handler.on_mouse_down(&mut self.context_data, 0); },
-            MouseButton::Middle => { self.handler.on_mouse_down(&mut self.context_data, 1); },
-            MouseButton::Right => { self.handler.on_mouse_down(&mut self.context_data, 2); },
-            _ => {}
+        {
+            self.mouse_motion_event(ctx, win_ctx, x as _, y as _, 0, 0);
+            match button {
+                MouseButton::Left => { self.handler.on_mouse_down(&mut self.context_data, 0); },
+                MouseButton::Middle => { self.handler.on_mouse_down(&mut self.context_data, 1); },
+                MouseButton::Right => { self.handler.on_mouse_down(&mut self.context_data, 2); },
+                _ => {}
+            }
         }
+        let dpi = ctx.get_dpi();
+        self.context_data.egui.mouse_button_down_event(ctx, button, x as f32 * dpi.0, y as f32 * dpi.1);
     }
 
     fn mouse_button_up_event(
@@ -862,37 +901,48 @@ impl<CtxHandler: ContextHandler> EventHandler for Stage<CtxHandler> {
         button: MouseButton, x: i32, y: i32,
         _clicks: u8
     ) {
-        self.mouse_motion_event(ctx, win_ctx,x as _, y as _, 0, 0);
-        match button {
-            MouseButton::Left => { self.handler.on_mouse_up(&mut self.context_data, 0); },
-            MouseButton::Middle => { self.handler.on_mouse_up(&mut self.context_data, 1); },
-            MouseButton::Right => { self.handler.on_mouse_up(&mut self.context_data, 2); },
-            _ => {}
+        {
+            self.mouse_motion_event(ctx, win_ctx,x as _, y as _, 0, 0);
+            match button {
+                MouseButton::Left => { self.handler.on_mouse_up(&mut self.context_data, 0); },
+                MouseButton::Middle => { self.handler.on_mouse_up(&mut self.context_data, 1); },
+                MouseButton::Right => { self.handler.on_mouse_up(&mut self.context_data, 2); },
+                _ => {}
+            }
         }
+        let dpi = ctx.get_dpi();
+        self.context_data.egui.mouse_button_up_event(ctx, button, x as f32 * dpi.0, y as f32 * dpi.1);
+    }
+
+    fn char_event(&mut self, _gfx_ctx: &mut Context, _win_ctx: &mut WindowContext, character: char) {
+        self.context_data.egui.char_event(character);
     }
 
     fn key_down_event(
         &mut self,
-        _ctx: &mut Context, _win_ctx: &mut WindowContext,
+        ctx: &mut Context, win_ctx: &mut WindowContext,
         keycode: gl_pipelines::window::KeyCode,
         keymods: gl_pipelines::window::KeyMods,
         _repeat: bool,
     ) {
-        let new_key_mods = KeyMods {
-            shift: keymods.shift,
-            option: keymods.alt,
-            control: keymods.ctrl,
-            command: keymods.logo
-        };
-        self.context_data.key_mods_pressed = new_key_mods;
-        if let Ok(key_code) = KeyCode::try_from(keycode) {
-            self.context_data.keys_pressed.insert(key_code);
-            self.handler.on_key_down(
-                &mut self.context_data,
-                key_code,
-                new_key_mods
-            );
+        {
+            let new_key_mods = KeyMods {
+                shift: keymods.shift,
+                option: keymods.alt,
+                control: keymods.ctrl,
+                command: keymods.logo
+            };
+            self.context_data.key_mods_pressed = new_key_mods;
+            if let Ok(key_code) = KeyCode::try_from(keycode) {
+                self.context_data.keys_pressed.insert(key_code);
+                self.handler.on_key_down(
+                    &mut self.context_data,
+                    key_code,
+                    new_key_mods
+                );
+            }
         }
+        self.context_data.egui.key_down_event(ctx, win_ctx, keycode, keymods);
     }
 
     fn key_up_event(
@@ -901,21 +951,24 @@ impl<CtxHandler: ContextHandler> EventHandler for Stage<CtxHandler> {
         keycode: gl_pipelines::window::KeyCode,
         keymods: gl_pipelines::window::KeyMods
     ) {
-        let new_key_mods = KeyMods {
-            shift: keymods.shift,
-            option: keymods.alt,
-            control: keymods.ctrl,
-            command: keymods.logo
-        };
-        self.context_data.key_mods_pressed = new_key_mods;
-        if let Ok(key_code) = KeyCode::try_from(keycode) {
-            self.context_data.keys_pressed.remove(&key_code);
-            self.handler.on_key_up(
-                &mut self.context_data,
-                key_code,
-                new_key_mods
-            );
+        {
+            let new_key_mods = KeyMods {
+                shift: keymods.shift,
+                option: keymods.alt,
+                control: keymods.ctrl,
+                command: keymods.logo
+            };
+            self.context_data.key_mods_pressed = new_key_mods;
+            if let Ok(key_code) = KeyCode::try_from(keycode) {
+                self.context_data.keys_pressed.remove(&key_code);
+                self.handler.on_key_up(
+                    &mut self.context_data,
+                    key_code,
+                    new_key_mods
+                );
+            }
         }
+        self.context_data.egui.key_up_event(keycode, keymods);
     }
 }
 
