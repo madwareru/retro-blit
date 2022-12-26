@@ -229,8 +229,30 @@ impl Mesh {
         )
     }
 
-    pub fn make_3x4() -> Mesh {
+    pub fn make_4x3() -> Mesh {
         const ASPECT_X: f32 = 4.0 / 3.0;
+        Self::make_mesh(
+            &[
+                [-ASPECT_X, -1.0, 0.0],
+                [ ASPECT_X,  1.0, 0.0],
+                [-ASPECT_X,  1.0, 0.0],
+                [ ASPECT_X, -1.0, 0.0],
+            ],
+            &[
+                [0.0, 0.0],
+                [1.0, 1.0],
+                [0.0, 1.0],
+                [1.0, 0.0],
+            ],
+            &[
+                [(1, 1), (2, 2), (3, 3)],
+                [(1, 1), (4, 4), (2, 2)],
+            ]
+        )
+    }
+
+    pub fn make_16x10() -> Mesh {
+        const ASPECT_X: f32 = 16.0 / 10.0;
         Self::make_mesh(
             &[
                 [-ASPECT_X, -1.0, 0.0],
