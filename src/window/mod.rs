@@ -1195,10 +1195,16 @@ impl WindowMode {
 }
 
 pub fn start<CtxHandler: 'static + ContextHandler>(handler: CtxHandler) {
+    let (mut ww, mut hh) = handler.get_window_mode().get_buffer_dimensions();
+    while hh < 600 {
+        ww *= 2;
+        hh *= 2;
+    }
+
     let conf = gl_pipelines::window::Conf {
         window_title: handler.get_window_title().to_string(),
-        window_width: 1024,
-        window_height: 768,
+        window_width: ww as _,
+        window_height: hh as _,
         high_dpi: true,
         fullscreen: false,
         sample_count: 6,
