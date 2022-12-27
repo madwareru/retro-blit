@@ -381,7 +381,7 @@ impl RetroBlitContext {
             for pixel in &mut self.buffer_pixels[stride..stride + rect.x_range.start].iter_mut() {
                 *pixel = color_idx;
             }
-            for pixel in &mut self.buffer_pixels[stride + rect.x_range.start + rect.get_width()..self.buffer_width].iter_mut() {
+            for pixel in &mut self.buffer_pixels[stride + rect.x_range.start + rect.get_width()..stride + self.buffer_width].iter_mut() {
                 *pixel = color_idx;
             }
         }
