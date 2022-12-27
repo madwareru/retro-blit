@@ -7,7 +7,7 @@ use gl_pipelines::window::{EventHandler, MouseButton, MouseWheelDirection, Param
 pub mod monitor_obj_loader;
 use monitor_obj_loader::Vec4;
 use crate::audio::{SoundDriver};
-use crate::rendering::blittable::{BufferProviderMut, SizedSurface};
+use crate::rendering::blittable::{BufferProviderMut, Rect, SizedSurface};
 use crate::math_utils::Barycentric2D;
 use crate::window::monitor_obj_loader::Mesh;
 
@@ -364,6 +364,26 @@ impl RetroBlitContext {
     pub fn clear(&mut self, color_idx: u8) {
         for pixel in self.buffer_pixels.iter_mut() {
             *pixel = color_idx;
+        }
+    }
+
+    pub fn clip_rect(&mut self, rect: Rect, color_idx: u8) {
+        for pixel in &mut self.buffer_pixels[..self.buffer_width * rect.y_range.start].iter_mut() {
+            *pixel = color_idx;
+        }
+
+        for pixel in &mut self.buffer_pixels[self.buffer_width * (rect.y_range.start + rect.get_height())..].iter_mut() {
+            *pixel = color_idx;
+        }
+
+        for j in 0..rect.get_height() {
+            let stride = (rect.y_range.start + j) * self.buffer_width;
+            for pixel in &mut self.buffer_pixels[stride..stride + rect.x_range.start].iter_mut() {
+                *pixel = color_idx;
+            }
+            for pixel in &mut self.buffer_pixels[stride + rect.x_range.start + rect.get_width()..self.buffer_width].iter_mut() {
+                *pixel = color_idx;
+            }
         }
     }
 
