@@ -1208,7 +1208,7 @@ impl WindowMode {
             WindowMode::Mode160x120 => (160, 120),
             WindowMode::Mode800x600 => (800, 600),
             WindowMode::Mode240x150 => (240, 150),
-            WindowMode::Mode480x300 => (800, 600),
+            WindowMode::Mode480x300 => (480, 300),
             WindowMode::Mode960x600 => (960, 600)
         }
     }
