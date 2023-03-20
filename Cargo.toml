@@ -1,6 +1,6 @@
 [package]
 name = "retro-blit"
-version = "0.1.7"
+version = "0.1.8"
 edition = "2018"
 description = "A library which lets you make games in a feel of old dos games with a screen of 320x200 dimension and 256 colors"
 

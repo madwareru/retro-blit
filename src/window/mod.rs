@@ -549,7 +549,7 @@ impl<CtxHandler: ContextHandler> ParametrizedEventHandler<CtxHandler> for Stage<
                 Mesh::make_empty(),
                 Mesh::make_square()
             ),
-            WindowMode::Mode240x150 | WindowMode::Mode480x300 | WindowMode::Mode640x200 | WindowMode::Mode960x600 => (
+            WindowMode::Mode240x150 | WindowMode::Mode480x300 | WindowMode::Mode640x400 | WindowMode::Mode960x600 => (
                 Mesh::make_empty(),
                 Mesh::make_16x10()
             )
@@ -1176,7 +1176,7 @@ pub enum WindowMode {
     Mode800x600,
     Mode240x150,
     Mode480x300,
-    Mode640x200,
+    Mode640x400,
     Mode960x600
 }
 impl WindowMode {
@@ -1193,7 +1193,7 @@ impl WindowMode {
             WindowMode::Mode800x600 => (1600, 1200),
             WindowMode::Mode240x150 => (1920, 1200),
             WindowMode::Mode480x300 => (1920, 1200),
-            WindowMode::Mode640x200 => (1920, 1200),
+            WindowMode::Mode640x400 => (1920, 1200),
             WindowMode::Mode960x600 => (1920, 1200),
         }
     }
@@ -1211,7 +1211,7 @@ impl WindowMode {
             WindowMode::Mode800x600 => (800, 600),
             WindowMode::Mode240x150 => (240, 150),
             WindowMode::Mode480x300 => (480, 300),
-            WindowMode::Mode640x200 => (640, 200),
+            WindowMode::Mode640x400 => (640, 400),
             WindowMode::Mode960x600 => (960, 600)
         }
     }
@@ -1220,7 +1220,7 @@ impl WindowMode {
 pub fn start<CtxHandler: 'static + ContextHandler>(handler: CtxHandler) {
     let (mut ww, mut hh) = handler.get_window_mode().get_buffer_dimensions();
 
-    if ww == 640 && hh == 200 {
+    if ww == 640 && hh == 400 {
         ww = 1920;
         hh = 1200;
     } else {
