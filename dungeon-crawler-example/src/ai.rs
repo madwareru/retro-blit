@@ -1,7 +1,9 @@
-use glam::{vec2};
+use glam::vec2;
 use rand::{Rng, thread_rng};
 use retro_blit::window::RetroBlitContext;
+use crate::systems_base::SystemMut;
 use crate::{App, CollisionTag, FreezeStun, HP, Monster, MonsterCorpseGhost, PaletteState, Player, Position};
+use crate::collision::move_position_towards;
 use crate::components::{DesiredVelocity, SpatialHandle};
 
 pub struct Blackboard {
@@ -75,6 +77,11 @@ impl App {
     }
 
     pub(crate) fn update_blackboard(&mut self) {
+        let world = &mut self.world;
+        let blackboard = &mut self.blackboard;
+
+        crate::works::ai::UpdateBlackboard.run_mut(world, blackboard);
+
         if let Some((_, (_, position))) = self.world.query::<(&Player, &Position)>().iter().next() {
             self.blackboard.player_position = *position;
         }
@@ -294,13 +301,9 @@ impl App {
             .iter()
             .filter(|(e, _)| self.world.get::<FreezeStun>(*e).is_err())
         {
+            let dir = vec2(desired_velocity.x, desired_velocity.y) * monster.speed() * dt;
             self.with_wang_data(|wang_data|{
-                let (new_pos, _) = super::collision::move_position_towards(
-                    *pos,
-                    vec2(desired_velocity.x * monster.speed() * dt, desired_velocity.y * monster.speed() * dt),
-                    CollisionTag::All,
-                    wang_data
-                );
+                let (new_pos, _) = move_position_towards(*pos, dir, CollisionTag::All, wang_data);
                 *pos = new_pos;
             })
         }

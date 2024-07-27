@@ -9,8 +9,14 @@ use rand::{Rng, thread_rng};
 #[derive(Copy, Clone)]
 pub struct Projectile<TCast: CastInfo, TProjectileBehaviour: ProjectileBehaviour<TCast>>{
     pub caster: Entity,
-    pub behaviour: TProjectileBehaviour,
-    pub(crate) _phantom_data: PhantomData<TCast>
+    _behaviour: PhantomData<TProjectileBehaviour>,
+    _phantom_data: PhantomData<TCast>
+}
+
+impl<TCast: CastInfo, TProjectileBehaviour: ProjectileBehaviour<TCast>> Projectile<TCast, TProjectileBehaviour> {
+    pub fn make(caster: Entity) -> Self {
+        Self { caster, _behaviour: PhantomData, _phantom_data: PhantomData }
+    }
 }
 
 #[derive(Copy, Clone, Eq, PartialEq)]

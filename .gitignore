@@ -1,2 +1,12 @@
 /target
 Cargo.lock
+.idea
+asteroids-example/target
+aseprite/.DS_Store
+asteroids-example/.DS_Store
+dungeon-crawler-example/target
+dungeon-crawler-example/.DS_Store
+map-editor-example/.DS_Store
+portal-map-viewer/target
+src/rendering/.DS_Store
+.DS_Store

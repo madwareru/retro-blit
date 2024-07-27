@@ -1,4 +1,3 @@
-use std::marker::PhantomData;
 use glam::vec2;
 use hecs::{CommandBuffer, Entity, World};
 use smallvec::SmallVec;
@@ -33,6 +32,8 @@ const VIEW_RANGE: f32 = 14.0;
 const NEAR: f32 = 0.005 * PIXELS_PER_METER;
 const FAR: f32 = PIXELS_PER_METER * VIEW_RANGE;
 
+pub(crate) mod systems_base;
+pub(crate) mod works;
 mod terrain_tiles_data;
 mod map_data;
 mod components;
@@ -148,9 +149,10 @@ fn cast_freeze_spell(
 ) {
     let angle = angle.0.to_radians();
     let forward_vec = vec2(angle.sin(), -angle.cos()) * 24.0;
+    let projectile: Projectile<FreezeSpellCast, FreezeSpellProjectile> = Projectile::make(caster);
     command_buffer.spawn(
         (
-            Projectile { caster, behaviour: FreezeSpellProjectile, _phantom_data: PhantomData },
+            projectile,
             Position{
                 x: position.x + forward_vec.x,
                 y: position.y + forward_vec.y
@@ -386,25 +388,26 @@ impl App {
     }
 
     fn render_terrain(&mut self, ctx: &mut RetroBlitContext) {
-        let trapezoid_coords;
-        if let Some((_, data)) = self.world.query::<(&Player, &Position, &Angle)>().iter().next() {
-            let (_, &Position { x, y }, &Angle(angle)) = data;
-            trapezoid_coords = gen_trapezoid_coords(x, y, angle.to_radians(), self.flags.fov_slope);
-        } else {
-            return;
-        }
+        let Some((_, (_, &Position { x, y }, &Angle(angle))))
+            = self.world
+                .query::<(&Player, &Position, &Angle)>()
+                .iter()
+                .next() else { return; };
+
+        let trapezoid_coords = gen_trapezoid_coords(x, y, angle.to_radians(), self.flags.fov_slope);
 
         let mut depth_buffer = std::mem::take(&mut self.depth_buffer);
         self.with_wang_data_mut(|wang_terrain| {
             for i in 0..160 {
                 let t = i as f32 / 159.0;
+
                 let uv_up = (
-                    trapezoid_coords[2].0 * (1.0 - t) + trapezoid_coords[3].0 * t,
-                    trapezoid_coords[2].1 * (1.0 - t) + trapezoid_coords[3].1 * t
+                    utils::lerp(trapezoid_coords[2].0, trapezoid_coords[3].0, t),
+                    utils::lerp(trapezoid_coords[2].1, trapezoid_coords[3].1, t)
                 );
                 let uv_bottom = (
-                    trapezoid_coords[0].0 * (1.0 - t) + trapezoid_coords[1].0 * t,
-                    trapezoid_coords[0].1 * (1.0 - t) + trapezoid_coords[1].1 * t
+                    utils::lerp(trapezoid_coords[0].0, trapezoid_coords[1].0, t),
+                    utils::lerp(trapezoid_coords[0].1, trapezoid_coords[1].1, t)
                 );
 
                 let mut max_h = 0;
@@ -1187,17 +1190,17 @@ Esc: Quit game"##,
     }
 
     fn render_objects(&mut self, ctx: &mut RetroBlitContext) {
-        let (forward, right, pos_x, pos_y);
-        if let Some((_, data)) = self.world.query::<(&Player, &Position, &Angle)>().iter().next() {
-            let (_, &Position { x, y }, &Angle(angle)) = data;
-            let angle = angle.to_radians();
-            forward = (angle.sin(), -angle.cos());
-            right = (angle.cos(), angle.sin());
-            pos_x = x;
-            pos_y = y;
-        } else {
-            return;
-        }
+        let Some((_, (_, &Position { x, y }, &Angle(angle)))) =
+            self.world
+                .query::<(&Player, &Position, &Angle)>()
+                .iter()
+                .next() else { return; };
+
+        let angle = angle.to_radians();
+        let forward = (angle.sin(), -angle.cos());
+        let right = (angle.cos(), angle.sin());
+        let pos_x = x;
+        let pos_y = y;
 
         for (_, (&potion, &Position { x, y })) in self.world.query::<(&Potion, &Position)>().iter() {
             let d_p = (x - pos_x, y - pos_y);
@@ -1206,7 +1209,7 @@ Esc: Quit game"##,
                 let depth = (t - NEAR) / (FAR - NEAR);
                 let u = utils::dot(d_p, right) / t / self.flags.fov_slope;
 
-                let x_scale = 40.0 * Self::scale_y(t, self.flags.fov_slope);
+                let x_scale = 40.0 * Self::scale_y(depth, self.flags.fov_slope);
                 let up = self.project_height(-24.0, depth);
                 let down = self.project_height(56.0, depth);
 

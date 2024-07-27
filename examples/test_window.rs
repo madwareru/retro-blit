@@ -1,7 +1,7 @@
 use retro_blit::rendering::BlittableSurface;
 use retro_blit::rendering::deformed_rendering::{TexturedVertex, TriangleRasterizer};
 use retro_blit::window::{RetroBlitContext, ContextHandler, WindowMode};
-use egui::*;
+
 
 const PICTURE_BYTES: &[u8] = include_bytes!("spritesheet.im256");
 

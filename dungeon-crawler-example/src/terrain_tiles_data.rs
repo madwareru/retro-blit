@@ -1,5 +1,5 @@
 use jfa_cpu::{MatrixJfa, Wrapping};
-use retro_blit::rendering::blittable::BufferProvider;
+use retro_blit::rendering::blittable::{BufferProvider, SizedSurface};
 
 const WANG_MASK_BYTES: &[u8] = include_bytes!("wang_mask.im256");
 const VORONOI_DOTS_BYTES: &[u8] = include_bytes!("voronoi_dots.im256");
@@ -25,6 +25,7 @@ impl TerrainTiles {
             ::load_from(WANG_MASK_BYTES)
                 .unwrap();
             let wang_buffer = wang_mask.get_buffer();
+            let w = wang_mask.get_width();
 
             wang_tiles.push(vec![0.0; 4096]);
             for i in 0..15 {
@@ -37,7 +38,7 @@ impl TerrainTiles {
                         .into_iter()
                         .filter_map(|idx| {
                             let (i, j) = (idx % TILE_SIZE, idx / TILE_SIZE);
-                            let idx = start_i + i + (start_j + j) * 256;
+                            let idx = start_i + i + (start_j + j) * w;
                             let col = unsafe { wang_buffer.get_unchecked(idx) };
                             if *col == 0 {
                                 None
@@ -71,6 +72,7 @@ impl TerrainTiles {
             ::load_from(VORONOI_DOTS_BYTES)
                 .unwrap();
             let voronoi_buffer = voronoi_dots.get_buffer();
+            let w = voronoi_dots.get_width();
 
             for i in 0..4 {
                 let x = i % 2;
@@ -82,7 +84,7 @@ impl TerrainTiles {
                         .into_iter()
                         .filter_map(|idx| {
                             let (i, j) = (idx % TILE_SIZE, idx / TILE_SIZE);
-                            let idx = start_i + i + (start_j + j) * 256;
+                            let idx = start_i + i + (start_j + j) * w;
                             let col = unsafe { voronoi_buffer.get_unchecked(idx) };
                             if *col == 0 {
                                 None
