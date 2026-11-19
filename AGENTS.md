@@ -36,7 +36,7 @@ cargo run
 
 When changing the root library, run the root tests and build each affected dependent demo from its own directory. Each package has its own lockfile and target directory.
 
-The unit tests cover mouse coordinate mapping in all flat (non-monitor) window modes. Graphical and audio changes also need runtime verification; compilation and unit tests alone do not prove rendering or audible playback works.
+The unit tests cover mouse coordinate mapping in all flat (non-monitor) window modes, plus deterministic headless input/timing, handler inspections, and native-resolution RGBA snapshots. Graphical and audio changes also need runtime verification; compilation and unit tests alone do not prove rendering or audible playback works.
 
 Windowing and rendering use winit and wgpu. Screen/mask rendering uses 4× MSAA with a resolve before single-sample egui. Pixel uploads use three bounded staging buffers with non-blocking `Queue::write_texture` fallback; do not write a slot while its mapping is pending.
 

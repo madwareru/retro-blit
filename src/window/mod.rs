@@ -6,6 +6,7 @@ use crate::rendering::blittable::{BufferProviderMut, Rect, SizedSurface};
 
 mod app;
 mod egui_integration;
+pub mod headless;
 pub mod monitor_obj_loader;
 mod renderer;
 mod texture_upload;
