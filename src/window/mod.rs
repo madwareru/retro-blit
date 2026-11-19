@@ -6,6 +6,7 @@ use gl_pipelines::window::{EventHandler, MouseButton, MouseWheelDirection, Param
 
 pub mod monitor_obj_loader;
 use monitor_obj_loader::Vec4;
+use crate::audio::{SoundDriver};
 use crate::rendering::blittable::{BufferProviderMut, Rect, SizedSurface};
 use crate::math_utils::Barycentric2D;
 use crate::window::monitor_obj_loader::Mesh;
@@ -277,6 +278,7 @@ impl TryFrom<gl_pipelines::window::KeyCode> for KeyCode {
 
 pub struct RetroBlitContext {
     egui: gl_pipelines::egui_integration::EguiMq,
+    sound_driver: Option<SoundDriver>,
     buffer_width: usize,
     buffer_height: usize,
     colors: [u8; 256 * 3],
@@ -325,8 +327,31 @@ impl BufferProviderMut<u8> for RetroBlitContext  {
 
 impl RetroBlitContext {
 
+    fn init_audio(&mut self) {
+        let sound_driver = SoundDriver::try_create();
+        match sound_driver {
+            Ok(driver) => {
+                self.sound_driver = Some(driver);
+            },
+            Err(error) => {
+                println!("Failed to init audio: {}", &error);
+            }
+        }
+    }
+
     pub fn quit(&mut self) {
         self.quit_fired = true;
+    }
+
+    pub fn borrow_sound_driver(&mut self) -> Option<&mut SoundDriver> {
+        match &mut (self.sound_driver) {
+            Some(driver) => {
+                Some(driver)
+            },
+            _ => {
+                None
+            }
+        }
     }
 
     pub fn put_pixel(&mut self, x: i16, y: i16, color: u8) {
@@ -632,6 +657,7 @@ impl<CtxHandler: ContextHandler> ParametrizedEventHandler<CtxHandler> for Stage<
 
         let mut context_data = RetroBlitContext {
             egui: gl_pipelines::egui_integration::EguiMq::new(ctx),
+            sound_driver: None,
             buffer_width,
             buffer_height,
             buffer_pixels: vec![0u8; buffer_width * buffer_height],
@@ -648,6 +674,7 @@ impl<CtxHandler: ContextHandler> ParametrizedEventHandler<CtxHandler> for Stage<
             quit_fired: false,
             cursor_hidden_fired: None
         };
+        context_data.init_audio();
 
         let mut handler = handler;
         handler.init(&mut context_data);
@@ -799,6 +826,9 @@ impl<CtxHandler: ContextHandler> EventHandler for Stage<CtxHandler> {
         }
         let dt = self.last_instant.elapsed().as_micros() as f32 / 1000000.0;
         self.last_instant = Instant::now();
+        if let Some(driver) = &mut self.context_data.sound_driver {
+            driver.maintain();
+        }
         self.handler.update(&mut self.context_data, dt);
         self.colors_texture.update(ctx, &self.context_data.colors);
         self.buffer_texture.update(ctx, &self.context_data.buffer_pixels);
