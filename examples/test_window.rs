@@ -96,7 +96,7 @@ impl ContextHandler for MyGame {
             );
     }
 
-    fn egui(&mut self, ctx: &mut RetroBlitContext, egui_ctx: egui::Context) {
+    fn egui(&mut self, ctx: &mut RetroBlitContext, egui_ctx: &egui::Context) {
         egui::Window::new("general")
             .show(&egui_ctx, |ui| {
                 ui.label("Some label");

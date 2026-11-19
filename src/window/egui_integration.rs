@@ -165,6 +165,6 @@ fn run_context<Handler: ContextHandler>(
     context: &mut RetroBlitContext,
 ) -> egui::FullOutput {
     egui_context.run_pass(raw_input, |egui_context| {
-        handler.egui(context, egui_context.clone());
+        handler.egui(context, egui_context);
     })
 }
