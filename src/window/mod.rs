@@ -1,10 +1,12 @@
 use std::collections::HashSet;
 use std::convert::TryFrom;
+use std::ops::Range;
 use std::time::Instant;
 use gl_pipelines::*;
 use gl_pipelines::window::{EventHandler, MouseButton, MouseWheelDirection, ParametrizedEventHandler, WindowContext};
 
 pub mod monitor_obj_loader;
+mod texture_upload;
 use monitor_obj_loader::Vec4;
 use crate::audio::{SoundDriver};
 use crate::rendering::blittable::{BufferProviderMut, Rect, SizedSurface};
@@ -491,6 +493,9 @@ pub struct Stage<CtxHandler: ContextHandler> {
     handler: CtxHandler,
     buffer_texture: Texture,
     colors_texture: Texture,
+    uploaded_pixels: Vec<u8>,
+    uploaded_colors: [u8; 256 * 3],
+    dirty_spans: Vec<Range<usize>>,
     last_instant: Instant
 }
 
@@ -801,6 +806,9 @@ impl<CtxHandler: ContextHandler> ParametrizedEventHandler<CtxHandler> for Stage<
             offscreen_pipeline,
             offscreen_binding,
             offscreen_pass,
+            uploaded_pixels: context_data.buffer_pixels.clone(),
+            uploaded_colors: context_data.colors,
+            dirty_spans: Vec::new(),
             context_data,
             handler,
             buffer_texture: buffer_texture.clone(),
@@ -830,8 +838,36 @@ impl<CtxHandler: ContextHandler> EventHandler for Stage<CtxHandler> {
             driver.maintain();
         }
         self.handler.update(&mut self.context_data, dt);
-        self.colors_texture.update(ctx, &self.context_data.colors);
-        self.buffer_texture.update(ctx, &self.context_data.buffer_pixels);
+
+        let width = self.context_data.buffer_width;
+        texture_upload::find_dirty_row_spans(
+            &self.context_data.buffer_pixels,
+            &self.uploaded_pixels,
+            width,
+            16,
+            &mut self.dirty_spans,
+        );
+        for span in &self.dirty_spans {
+            let start = span.start * width;
+            let end = span.end * width;
+            self.buffer_texture.update_texture_part(
+                ctx,
+                0,
+                span.start as _,
+                0,
+                width as _,
+                (span.end - span.start) as _,
+                1,
+                &self.context_data.buffer_pixels[start..end],
+            );
+            self.uploaded_pixels[start..end]
+                .copy_from_slice(&self.context_data.buffer_pixels[start..end]);
+        }
+
+        if self.uploaded_colors != self.context_data.colors {
+            self.colors_texture.update(ctx, &self.context_data.colors);
+            self.uploaded_colors = self.context_data.colors;
+        }
     }
 
     fn draw(&mut self, ctx: &mut Context, win_ctx: &mut WindowContext) {
