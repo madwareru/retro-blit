@@ -1,6 +1,6 @@
 [package]
 name = "retro-blit"
-version = "0.1.12"
+version = "0.2.0"
 edition = "2018"
 description = "A library which lets you make games in a feel of old dos games with a screen of 320x200 dimension and 256 colors"
 
@@ -8,7 +8,6 @@ description = "A library which lets you make games in a feel of old dos games wi
 
 [dependencies]
 thiserror = "1.0.31"
-gl_pipelines = { git = "https://github.com/madwareru/gl_pipelines", version = "0.3.11" }
 jfa-cpu = { git = "https://github.com/madwareru/jfa-cpu", version = "0.2.0" }
 bin-serialization-rs = { git = "https://github.com/madwareru/bin-serialization-rs", version = "0.1.6" }
 lyon = "0.17.10"
@@ -18,4 +17,9 @@ maplit = "1.0.2"
 bytemuck = "1.12"
 bumpalo = { version = "3.10.0", features = ["collections"]}
 rodio = "0.23.0"
-egui = "0.19"
+egui = "0.37.0"
+wgpu = { version = "30.0.1", default-features = false, features = ["std", "parking_lot", "dx12", "metal", "gles", "vulkan", "wgsl"] }
+winit = "0.30.13"
+egui-wgpu = { version = "0.37.0", default-features = false, features = ["macos-window-resize-jitter-fix"] }
+egui-winit = "0.37.0"
+pollster = "1.0.3"

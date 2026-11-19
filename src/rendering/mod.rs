@@ -27,14 +27,14 @@ impl BlittableSurface {
         }
     }
 
-    pub fn with_color_key(&self, color_key: u8) -> ColorKeyWrapper {
+    pub fn with_color_key(&self, color_key: u8) -> ColorKeyWrapper<'_> {
         ColorKeyWrapper{
             wrapped: self,
             color_key
         }
     }
 
-    pub fn with_color_key_blink(&self, color_key: u8, blink_color: u8) -> ColorKeyBlinkWrapper {
+    pub fn with_color_key_blink(&self, color_key: u8, blink_color: u8) -> ColorKeyBlinkWrapper<'_> {
         ColorKeyBlinkWrapper{
             wrapped: self,
             color_key,

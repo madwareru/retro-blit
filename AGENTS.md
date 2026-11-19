@@ -4,7 +4,7 @@ Retro-blit is a Rust library for DOS-style games using low-resolution, 8-bit ind
 
 ## Repository layout
 
-- `src/window/`: window/event loop, input, `RetroBlitContext`, palette management, and presentation.
+- `src/window/`: winit event loop and input, `RetroBlitContext`, wgpu/egui presentation, palette management, and bounded staging uploads.
 - `src/rendering/`: indexed-color surfaces, blitting, rasterization, tessellation, transforms, and fonts.
 - `src/audio/`: Rodio-backed `SoundDriver` and decoded `SoundHandle` values.
 - `src/format_loaders/`: IM256 and 256-color BMP loaders.
@@ -38,7 +38,7 @@ When changing the root library, run the root tests and build each affected depen
 
 The test suite currently contains no unit tests, so a passing `cargo test` is only a compile/doc-test check. Graphical and audio changes also need runtime verification; compilation alone does not prove rendering or audible playback works.
 
-Keep `.cargo/config.toml`'s `CMAKE_POLICY_VERSION_MINIMUM=3.5` setting: it allows the transitive SDL2 build to configure with current CMake versions.
+Windowing and rendering use winit and wgpu. Screen/mask rendering uses 4× MSAA with a resolve before single-sample egui. Pixel uploads use three bounded staging buffers with non-blocking `Queue::write_texture` fallback; do not write a slot while its mapping is pending.
 
 ## Project conventions
 
