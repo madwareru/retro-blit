@@ -1,8 +1,8 @@
 use std::collections::VecDeque;
 use std::io::{BufReader, Cursor};
-use std::sync::Arc;
-use rodio::{Source, StreamError, decoder::DecoderError, Sink};
-use rodio::dynamic_mixer::{DynamicMixerController, mixer};
+use rodio::{Source, DeviceSinkError, decoder::DecoderError, Player};
+use rodio::mixer::{Mixer, mixer};
+use rodio::source::Zero;
 
 type MemoryDecoder = rodio::Decoder<Cursor<&'static[u8]>>;
 type FileDecoder = rodio::Decoder<BufReader<std::fs::File>>;
@@ -26,20 +26,23 @@ impl SoundHandle {
 }
 
 pub struct SoundDriver {
-    _stream: rodio::OutputStream,
-    active_sounds: Vec<Option<rodio::Sink>>,
+    _stream: rodio::MixerDeviceSink,
+    active_sounds: Vec<Option<Player>>,
     free_list: VecDeque<usize>,
-    global_sink: Sink,
-    global_mixer_controller: Arc<DynamicMixerController<f32>>
+    global_sink: Player,
+    global_mixer_controller: Mixer
 }
 impl SoundDriver {
-    pub fn try_create() -> Result<Self, StreamError> {
-        let (_stream, handle) = rodio::OutputStream::try_default()?;
+    pub fn try_create() -> Result<Self, DeviceSinkError> {
+        let _stream = rodio::DeviceSinkBuilder::from_default_device()?
+            .with_buffer_size(rodio::cpal::BufferSize::Fixed(1024))
+            .open_sink_or_fallback()?;
         let free_list = VecDeque::new();
         let active_sounds = Vec::new();
-        let global_sink = rodio::Sink::try_new(&handle).unwrap();
+        let global_sink = Player::connect_new(_stream.mixer());
         let (global_mixer_controller, global_dynamic_mixer) =
-            mixer(2, 44100);
+            mixer(rodio::nz!(2), rodio::nz!(44100));
+        global_mixer_controller.add(Zero::new(rodio::nz!(2), rodio::nz!(44100)));
         global_sink.append(global_dynamic_mixer);
         Ok(Self {
             _stream,
@@ -56,7 +59,7 @@ impl SoundDriver {
 
     pub fn play_sound(&mut self, sound: SoundHandle) -> usize
     {
-        let (sink, queue_rx) = Sink::new_idle();
+        let (sink, queue_rx) = Player::new();
         self.global_mixer_controller.add(queue_rx);
         match sound {
             SoundHandle::Memory(memory_sound) => {
