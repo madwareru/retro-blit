@@ -1497,7 +1497,7 @@ dependencies = [
 
 [[package]]
 name = "retro-blit"
-version = "0.1.11"
+version = "0.1.12"
 dependencies = [
  "bin-serialization-rs",
  "bumpalo",
