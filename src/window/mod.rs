@@ -490,7 +490,7 @@ pub trait ContextHandler {
     fn on_key_up(&mut self, _ctx: &mut RetroBlitContext, _key_code: KeyCode, _key_mods: KeyMods) {}
     fn init(&mut self, ctx: &mut RetroBlitContext);
     fn update(&mut self, ctx: &mut RetroBlitContext, dt: f32);
-    fn egui(&mut self, _ctx: &mut RetroBlitContext, _egui_ctx: &egui::Context) {}
+    fn egui(&mut self, _ctx: &mut RetroBlitContext, _egui_ctx: egui::Context) {}
 }
 
 fn get_buffer_dimensions(handler: &impl ContextHandler) -> (usize, usize) {
