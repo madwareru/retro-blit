@@ -91,8 +91,11 @@ impl<CtxHandler: ContextHandler> App<CtxHandler> {
                 }
             }
             _ => {
-                let aspect =
-                    self.context_data.buffer_width as f32 / self.context_data.buffer_height as f32;
+                let (render_width, render_height) = self
+                    .handler
+                    .get_window_mode()
+                    .get_render_texture_dimensions();
+                let aspect = render_width as f32 / render_height as f32;
                 let u = ((x / aspect).clamp(-1.0, 1.0) + 1.0) / 2.0;
                 let v = 1.0 - (y.clamp(-1.0, 1.0) + 1.0) / 2.0;
                 self.context_data.mouse_x = u * self.context_data.buffer_width as f32;
@@ -306,4 +309,55 @@ pub(crate) fn run<CtxHandler: 'static + ContextHandler>(
     event_loop.set_control_flow(ControlFlow::Poll);
     let mut app = App::new(handler, width, height);
     event_loop.run_app(&mut app).expect("event loop failed");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use super::super::WindowMode;
+
+    struct TestHandler(WindowMode);
+
+    impl ContextHandler for TestHandler {
+        fn get_window_title(&self) -> &'static str {
+            "test"
+        }
+
+        fn get_window_mode(&self) -> WindowMode {
+            self.0
+        }
+
+        fn init(&mut self, _ctx: &mut RetroBlitContext) {}
+
+        fn update(&mut self, _ctx: &mut RetroBlitContext, _dt: f32) {}
+    }
+
+    fn assert_close(actual: f32, expected: f32) {
+        assert!((actual - expected).abs() < 0.001, "expected {}, got {}", expected, actual);
+    }
+
+    #[test]
+    fn flat_modes_map_display_edges_to_buffer_edges() {
+        let modes = [
+            (WindowMode::Mode13Frameless, 320, 200, 4.0 / 3.0),
+            (WindowMode::ModeXFrameless, 320, 240, 4.0 / 3.0),
+            (WindowMode::Mode64x64, 64, 64, 1.0),
+            (WindowMode::Mode128x128, 128, 128, 1.0),
+            (WindowMode::Mode256x256, 256, 256, 1.0),
+            (WindowMode::Mode160x120, 160, 120, 4.0 / 3.0),
+            (WindowMode::Mode800x600, 800, 600, 4.0 / 3.0),
+            (WindowMode::Mode240x150, 240, 150, 16.0 / 10.0),
+            (WindowMode::Mode480x300, 480, 300, 16.0 / 10.0),
+            (WindowMode::Mode640x400, 640, 400, 16.0 / 10.0),
+            (WindowMode::Mode960x600, 960, 600, 16.0 / 10.0),
+        ];
+        for (mode, width, height, display_aspect) in modes.iter().copied() {
+            let mut app = App::new(TestHandler(mode), width as u32, height as u32);
+            app.check_for_hit_test(display_aspect, 0.0);
+            assert_close(app.context_data.mouse_x, width as f32);
+            assert_close(app.context_data.mouse_y, height as f32 / 2.0);
+            app.check_for_hit_test(-display_aspect, 0.0);
+            assert_close(app.context_data.mouse_x, 0.0);
+        }
+    }
 }
