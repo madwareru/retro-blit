@@ -295,11 +295,30 @@ pub struct RetroBlitContext {
     cursor_hidden_fired: Option<bool>,
 }
 
+fn egui_font_definitions() -> egui::FontDefinitions {
+    const FONT_NAME: &str = "JetBrainsMono-Medium";
+    let mut definitions = egui::FontDefinitions::default();
+    definitions.font_data.insert(
+        FONT_NAME.to_owned(),
+        egui::FontData::from_static(include_bytes!("JetBrainsMono-Medium.ttf")).into(),
+    );
+    for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace].iter() {
+        definitions
+            .families
+            .get_mut(family)
+            .unwrap()
+            .insert(0, FONT_NAME.to_owned());
+    }
+    definitions
+}
+
 impl RetroBlitContext {
     fn new(handler: &impl ContextHandler) -> Self {
         let (buffer_width, buffer_height) = get_buffer_dimensions(handler);
+        let egui = egui::Context::default();
+        egui.set_fonts(egui_font_definitions());
         Self {
-            egui: egui::Context::default(),
+            egui,
             sound_driver: None,
             buffer_width,
             buffer_height,
