@@ -63,74 +63,59 @@ impl SoundDriver {
         let (sink, queue_rx) = Player::new();
         self.global_mixer_controller.add(queue_rx);
         match sound {
-            SoundHandle::Memory(memory_sound) => {
-                sink.append(memory_sound);
-            }
-            SoundHandle::File(file_sound) => {
-                sink.append(file_sound);
+            SoundHandle::Memory(memory_sound) => sink.append(memory_sound),
+            SoundHandle::File(file_sound) => sink.append(file_sound),
+        }
+
+        match self.free_list.pop_back() {
+            Some(id) => {
+                self.active_sounds[id] = Some(sink);
+                id
+            },
+            _ => {
+                let id = self.active_sounds.len();
+                self.active_sounds.push(Some(sink));
+                id
             }
         }
-        let id = self.free_list
-            .pop_back()
-            .unwrap_or(self.active_sounds.len());
-        if id < self.active_sounds.len() {
-            self.active_sounds[id] = Some(sink);
-        } else {
-            self.active_sounds.push(Some(sink))
-        }
-        id
     }
 
     pub fn playback_in_progress(&self, play_handle: usize) -> bool {
-        play_handle < self.active_sounds.len() &&
-            self.active_sounds[play_handle].is_some()
+        self.active_sounds.get(play_handle)
+            .map(|it| it.is_some())
+            .unwrap_or(false)
     }
 
     pub fn set_volume(&self, play_handle: usize, volume: f32) {
-        if play_handle >= self.active_sounds.len() { return; }
-        if let Some(sink) = &self.active_sounds[play_handle] {
-            sink.set_volume(volume * volume);
-        }
+        let Some(sink_ref) = self.active_sounds.get(play_handle) else { return;} ;
+        let Some(sink) = sink_ref else { return; };
+        sink.set_volume(volume * volume);
     }
 
     pub fn pause_playback(&self, play_handle: usize) {
-        if play_handle >= self.active_sounds.len() { return; }
-        if let Some(sink) = &self.active_sounds[play_handle] {
-            sink.pause();
-        }
+        let Some(sink_ref) = self.active_sounds.get(play_handle) else { return;} ;
+        let Some(sink) = sink_ref else { return; };
+        sink.pause();
     }
 
     pub fn continue_playback(&self, play_handle: usize) {
-        if play_handle >= self.active_sounds.len() { return; }
-        if let Some(sink) = &self.active_sounds[play_handle] {
-            sink.play();
-        }
+        let Some(sink_ref) = self.active_sounds.get(play_handle) else { return;} ;
+        let Some(sink) = sink_ref else { return; };
+        sink.play();
     }
 
     pub fn stop_playback(&mut self, play_handle: usize) {
-        if play_handle >= self.active_sounds.len() { return; }
-        let stopped = if let Some(sink) = &mut self.active_sounds[play_handle] {
-            sink.stop();
-            true
-        } else {
-            false
-        };
-        if stopped {
-            self.free_list.push_back(play_handle);
-            self.active_sounds[play_handle] = None;
-        }
+        let Some(sink_ref) = self.active_sounds.get(play_handle) else { return;} ;
+        let Some(sink) = sink_ref else { return; };
+        sink.stop();
     }
 
     pub fn maintain(&mut self) {
         for i in 0..self.active_sounds.len() {
-            let should_free = match &(self.active_sounds[i]) {
-                Some(sink) if sink.empty() => true,
-                _ => false
-            };
-            if should_free {
-                self.active_sounds[i] = None;
-                self.free_list.push_back(i);
-            }
+            let Some(sink) = &mut self.active_sounds[i] else { continue; };
+            if !sink.empty() { continue; }
+            self.active_sounds[i] = None;
+            self.free_list.push_back(i);
         }
     }
 }
