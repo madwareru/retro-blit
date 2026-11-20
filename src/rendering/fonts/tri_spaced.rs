@@ -250,6 +250,10 @@ impl Font {
         }
     }
 
+    pub fn unload_unused_allocations(&mut self) {
+        self.arena.reset();
+    }
+
     pub fn default_font_small() -> Result<Self, Im256LoadingError> {
         let (_, surface) = crate::format_loaders::im_256::Image::load_from(DEFAULT_TRISPACED_FONT_SMALL_BYTES)?;
         let font_info = FontInfo {

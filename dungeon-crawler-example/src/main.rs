@@ -1579,6 +1579,7 @@ impl ContextHandler for App {
     }
 
     fn update(&mut self, ctx: &mut RetroBlitContext, dt: f32) {
+        self.font.unload_unused_allocations();
         self.update_palette(ctx, dt);
         self.update_castings(dt);
         self.update_projectiles(dt);

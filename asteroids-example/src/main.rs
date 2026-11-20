@@ -128,6 +128,9 @@ impl retro_blit::window::ContextHandler for DemoGame {
     }
 
     fn update(&mut self, ctx: &mut RetroBlitContext, dt: f32) {
+        self.bump_allocator.reset();
+        self.font.unload_unused_allocations();
+
         if let Some(music_handle) = self.music_handle {
             self.music_handle = ctx
                 .borrow_sound_driver()
