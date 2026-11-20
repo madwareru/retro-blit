@@ -81,41 +81,49 @@ impl SoundDriver {
     }
 
     pub fn playback_in_progress(&self, play_handle: usize) -> bool {
-        self.active_sounds.get(play_handle)
-            .map(|it| it.is_some())
-            .unwrap_or(false)
+        self.get_player(play_handle).is_some()
     }
 
     pub fn set_volume(&self, play_handle: usize, volume: f32) {
-        let Some(sink_ref) = self.active_sounds.get(play_handle) else { return;} ;
-        let Some(sink) = sink_ref else { return; };
-        sink.set_volume(volume * volume);
+        self.get_player(play_handle)
+            .map(|player| player.set_volume(volume * volume));
     }
 
     pub fn pause_playback(&self, play_handle: usize) {
-        let Some(sink_ref) = self.active_sounds.get(play_handle) else { return;} ;
-        let Some(sink) = sink_ref else { return; };
-        sink.pause();
+        self.get_player(play_handle)
+            .map(|player| {
+                if !player.is_paused() {
+                    player.pause();
+                }
+            });
     }
 
     pub fn continue_playback(&self, play_handle: usize) {
-        let Some(sink_ref) = self.active_sounds.get(play_handle) else { return;} ;
-        let Some(sink) = sink_ref else { return; };
-        sink.play();
+         self.get_player(play_handle)
+             .map(|player| {
+                 if player.is_paused() {
+                     player.play();
+                 }
+             });
     }
 
     pub fn stop_playback(&mut self, play_handle: usize) {
-        let Some(sink_ref) = self.active_sounds.get(play_handle) else { return;} ;
-        let Some(sink) = sink_ref else { return; };
-        sink.stop();
+        let Some(player) = self.get_player(play_handle) else { return; };
+        player.stop();
+        self.free_list.push_back(play_handle);
+        self.active_sounds[play_handle] = None;
     }
 
     pub fn maintain(&mut self) {
         for i in 0..self.active_sounds.len() {
-            let Some(sink) = &mut self.active_sounds[i] else { continue; };
-            if !sink.empty() { continue; }
+            let Some(player) = self.get_player(i) else { continue; };
+            if !player.empty() { continue; }
             self.active_sounds[i] = None;
             self.free_list.push_back(i);
         }
+    }
+
+    fn get_player(&self, play_handle: usize) -> Option<&Player> {
+        self.active_sounds.get(play_handle).and_then(|it| it.as_ref())
     }
 }
