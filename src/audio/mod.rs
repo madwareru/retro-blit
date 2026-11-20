@@ -34,18 +34,19 @@ pub struct SoundDriver {
 }
 impl SoundDriver {
     pub fn try_create() -> Result<Self, DeviceSinkError> {
-        let _stream = rodio::DeviceSinkBuilder::from_default_device()?
+        let mut stream = rodio::DeviceSinkBuilder::from_default_device()?
             .with_buffer_size(rodio::cpal::BufferSize::Fixed(1024))
             .open_sink_or_fallback()?;
+        stream.log_on_drop(false);
         let free_list = VecDeque::new();
         let active_sounds = Vec::new();
-        let global_sink = Player::connect_new(_stream.mixer());
+        let global_sink = Player::connect_new(stream.mixer());
         let (global_mixer_controller, global_dynamic_mixer) =
             mixer(rodio::nz!(2), rodio::nz!(44100));
         global_mixer_controller.add(Zero::new(rodio::nz!(2), rodio::nz!(44100)));
         global_sink.append(global_dynamic_mixer);
         Ok(Self {
-            _stream,
+            _stream: stream,
             active_sounds,
             free_list,
             global_sink,
