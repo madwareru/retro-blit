@@ -1,28 +1,29 @@
 use std::{convert::TryInto, time::Duration};
 
+use image::{codecs::png::PngEncoder, ColorType, ImageEncoder};
+
 use super::{ContextHandler, KeyCode, KeyMods, RetroBlitContext};
 
 /// Deterministic, windowless driver for testing a [`ContextHandler`].
 ///
-/// Methods execute immediately in ordinary Rust control flow. Each `after`
-/// argument first advances the timeline relative to the previous action and
-/// runs intervening fixed-step updates. Zero-delay actions remain grouped
-/// before the same pending update. Snapshots are optional and do not consume
-/// the runner. No window, GPU, audio, or egui rendering is involved.
+/// Methods execute immediately in ordinary Rust control flow. Use the wait
+/// methods to advance virtual time. Input, inspection, and snapshot methods
+/// first run all fixed-step updates due at the current time. Snapshots are
+/// optional and do not consume the runner. No window, GPU, audio, or egui
+/// rendering is involved.
 ///
 /// # Example
 ///
 /// ```rust,ignore
 /// let mut test = HeadlessRunner::new(MyGame::new());
-/// test.mouse_move(Duration::ZERO, 10.0, 20.0);
-/// test.mouse_click(Duration::from_millis(50), 0);
+/// test.mouse_move(10.0, 20.0);
+/// test.wait_for_seconds(0.050);
+/// test.mouse_click(0);
 ///
 /// for index in 0..4 {
-///     let (x, y) = test.inspect(Duration::ZERO, |game| {
-///         game.buttons[index].position()
-///     });
-///     test.mouse_move(Duration::ZERO, x, y);
-///     test.mouse_click(Duration::ZERO, 0);
+///     let (x, y) = test.inspect(|game| game.buttons[index].position());
+///     test.mouse_move(x, y);
+///     test.mouse_click(0);
 /// }
 ///
 /// let snapshot = test.snapshot();
@@ -32,7 +33,6 @@ pub struct HeadlessRunner<H: ContextHandler> {
     context: RetroBlitContext,
     current_time: Duration,
     next_update_time: Duration,
-    pending_update: bool,
     frame_dt: Duration,
     press_duration: Duration,
 }
@@ -50,7 +50,6 @@ impl<H: ContextHandler> HeadlessRunner<H> {
             context,
             current_time: Duration::ZERO,
             next_update_time: Duration::ZERO,
-            pending_update: false,
             frame_dt: Duration::from_millis(8),
             press_duration: Duration::from_millis(30),
         }
@@ -64,17 +63,34 @@ impl<H: ContextHandler> HeadlessRunner<H> {
     /// # Panics
     ///
     /// Panics if `frame_dt` is zero.
-    pub fn with_frame_dt(&mut self, frame_dt: Duration) {
+    pub fn with_frame_dt(mut self, frame_dt: Duration) -> Self {
         assert!(!frame_dt.is_zero(), "frame duration must be nonzero");
         self.frame_dt = frame_dt;
+        self
     }
 
     /// Sets the down-to-up delay for subsequent clicks and key presses.
     ///
     /// The default is 30 ms. Durations shorter than the update interval are
     /// allowed, so an update is not guaranteed to observe every held input.
-    pub fn with_press_duration(&mut self, press_duration: Duration) {
+    pub fn with_press_duration(mut self, press_duration: Duration) -> Self {
         self.press_duration = press_duration;
+        self
+    }
+
+    /// Advances past the next fixed-step update without adding an event.
+    pub fn wait_for_frame(&mut self) {
+        self.wait_until(self.next_update_time + Duration::from_micros(1));
+    }
+
+    /// Advances the timeline by `seconds` without adding an event.
+    pub fn wait_for_seconds(&mut self, seconds: f32) {
+        self.wait_until(self.current_time + Duration::from_secs_f32(seconds));
+    }
+
+    /// Advances the timeline by `millis` milliseconds without adding an event.
+    pub fn wait_for_millis(&mut self, millis: u64) {
+        self.wait_until(self.current_time + Duration::from_millis(millis));
     }
 
     /// Advances the timeline to `exact_time` without adding an event.
@@ -86,36 +102,34 @@ impl<H: ContextHandler> HeadlessRunner<H> {
     }
 
     /// Executes a move to fixed game-buffer coordinates.
-    pub fn mouse_move(&mut self, after: Duration, x: f32, y: f32) {
-        self.prepare(after);
+    pub fn mouse_move(&mut self, x: f32, y: f32) {
+        self.prepare();
         self.context.mouse_x = x;
         self.context.mouse_y = y;
     }
 
     /// Executes [`ContextHandler::on_mouse_down`] for `button_number`.
-    pub fn mouse_down(&mut self, after: Duration, button_number: u8) {
-        self.prepare(after);
+    pub fn mouse_down(&mut self, button_number: u8) {
+        self.prepare();
         self.handler.on_mouse_down(&mut self.context, button_number);
     }
 
     /// Executes [`ContextHandler::on_mouse_up`] for `button_number`.
-    pub fn mouse_up(&mut self, after: Duration, button_number: u8) {
-        self.prepare(after);
+    pub fn mouse_up(&mut self, button_number: u8) {
+        self.prepare();
         self.handler.on_mouse_up(&mut self.context, button_number);
     }
 
     /// Executes a mouse down/up pair separated by the current press duration.
-    ///
-    /// Subsequent relative delays are measured from the release.
-    pub fn mouse_click(&mut self, after: Duration, button_number: u8) {
-        self.mouse_down(after, button_number);
-        let press_duration = self.press_duration;
-        self.mouse_up(press_duration, button_number);
+    pub fn mouse_click(&mut self, button_number: u8) {
+        self.mouse_down(button_number);
+        self.wait_until(self.current_time + self.press_duration);
+        self.mouse_up(button_number);
     }
 
     /// Executes a key press, updating held-key and modifier state before the callback.
-    pub fn key_down(&mut self, after: Duration, key_code: KeyCode) {
-        self.prepare(after);
+    pub fn key_down(&mut self, key_code: KeyCode) {
+        self.prepare();
         self.context.keys_pressed.insert(key_code);
         let key_mods = self.key_mods();
         self.context.key_mods_pressed = key_mods;
@@ -124,8 +138,8 @@ impl<H: ContextHandler> HeadlessRunner<H> {
     }
 
     /// Executes a key release, updating held-key and modifier state before the callback.
-    pub fn key_up(&mut self, after: Duration, key_code: KeyCode) {
-        self.prepare(after);
+    pub fn key_up(&mut self, key_code: KeyCode) {
+        self.prepare();
         self.context.keys_pressed.remove(&key_code);
         let key_mods = self.key_mods();
         self.context.key_mods_pressed = key_mods;
@@ -134,12 +148,10 @@ impl<H: ContextHandler> HeadlessRunner<H> {
     }
 
     /// Executes a key down/up pair separated by the current press duration.
-    ///
-    /// Subsequent relative delays are measured from the release.
-    pub fn key_press(&mut self, after: Duration, key_code: KeyCode) {
-        self.key_down(after, key_code);
-        let press_duration = self.press_duration;
-        self.key_up(press_duration, key_code);
+    pub fn key_press(&mut self, key_code: KeyCode) {
+        self.key_down(key_code);
+        self.wait_until(self.current_time + self.press_duration);
+        self.key_up(key_code);
     }
 
     /// Executes a read-only inspection of the current handler state.
@@ -147,29 +159,23 @@ impl<H: ContextHandler> HeadlessRunner<H> {
     /// Use this to assert internal game state or read coordinates and other
     /// values for later actions. The closure's return value is returned
     /// directly, so inspections work naturally inside loops and conditionals.
-    pub fn inspect<T>(&mut self, after: Duration, f: impl FnOnce(&H) -> T) -> T {
-        self.prepare(after);
+    pub fn inspect<T>(&mut self, f: impl FnOnce(&H) -> T) -> T {
+        self.prepare();
         f(&self.handler)
     }
 
-    /// Returns the current native-resolution RGBA buffer.
+    /// Runs due updates and returns the current native-resolution RGBA buffer.
     ///
-    /// If the latest action has a pending fixed-step update, that update runs
-    /// before the snapshot. The runner remains usable for more actions.
+    /// The runner remains usable for more actions.
     pub fn snapshot(&mut self) -> HeadlessSnapshot {
-        if self.pending_update {
-            self.update();
-            self.pending_update = false;
-        }
+        self.prepare();
         HeadlessSnapshot::from_context(&self.context)
     }
 
-    fn prepare(&mut self, after: Duration) {
-        self.current_time += after;
+    fn prepare(&mut self) {
         while self.next_update_time < self.current_time {
             self.update();
         }
-        self.pending_update = true;
     }
 
     fn update(&mut self) {
@@ -217,6 +223,18 @@ impl HeadlessSnapshot {
 
     pub fn as_rgba(&self) -> &[u8] {
         &self.rgba
+    }
+
+    /// Encodes the snapshot as PNG bytes for saving to a file.
+    pub fn to_png_bytes(&self) -> image::ImageResult<Vec<u8>> {
+        let mut bytes = Vec::new();
+        PngEncoder::new(&mut bytes).write_image(
+            &self.rgba,
+            self.width as u32,
+            self.height as u32,
+            ColorType::Rgba8,
+        )?;
+        Ok(bytes)
     }
 
     pub fn rgba_pixel(&self, x: usize, y: usize) -> [u8; 4] {
@@ -326,18 +344,32 @@ mod tests {
     }
 
     #[test]
+    fn snapshot_encodes_png_bytes() {
+        let mut context = RetroBlitContext::new(&RecordingHandler::new());
+        context.set_palette(1, [10, 20, 30]);
+        context.put_pixel(2, 3, 1);
+        let snapshot = HeadlessSnapshot::from_context(&context);
+
+        let png = snapshot.to_png_bytes().unwrap();
+        let decoded = image::load_from_memory(&png).unwrap().to_rgba8();
+
+        assert_eq!(decoded.dimensions(), (64, 64));
+        assert_eq!(decoded.get_pixel(2, 3).0, [10, 20, 30, 255]);
+    }
+
+    #[test]
     fn runner_dispatches_events_in_call_order() {
         let delay = Duration::from_millis(10);
-        let mut runner = HeadlessRunner::new(RecordingHandler::new());
-        runner.with_frame_dt(delay);
-        runner.mouse_move(Duration::ZERO, 10.0, 20.0);
-        runner.key_down(delay, KeyCode::A);
-        runner.key_down(Duration::ZERO, KeyCode::LeftShift);
-        runner.mouse_down(Duration::ZERO, 0);
-        runner.key_up(Duration::ZERO, KeyCode::LeftShift);
+        let mut runner = HeadlessRunner::new(RecordingHandler::new()).with_frame_dt(delay);
+        runner.mouse_move(10.0, 20.0);
+        runner.wait_for_frame();
+        runner.key_down(KeyCode::A);
+        runner.key_down(KeyCode::LeftShift);
+        runner.mouse_down(0);
+        runner.key_up(KeyCode::LeftShift);
         runner.snapshot();
 
-        let log = runner.inspect(Duration::ZERO, |handler| handler.log.clone());
+        let log = runner.inspect(|handler| handler.log.clone());
         assert_eq!(
             log.as_slice(),
             [
@@ -347,23 +379,21 @@ mod tests {
                 &format!("key_down:{}:true:true", KeyCode::LeftShift as u8),
                 "mouse_down:0:10:20",
                 &format!("key_up:{}:false:false", KeyCode::LeftShift as u8),
-                "update:0.010:true:false",
             ]
         );
     }
 
     #[test]
     fn inspect_returns_handler_values_for_mouse_moves() {
-        let mut runner = HeadlessRunner::new(RecordingHandler::new());
-        runner.with_frame_dt(Duration::from_millis(10));
-        let (x, y) = runner.inspect(Duration::from_millis(15), |handler| {
-            (handler.updates as f32, 20.0)
-        });
-        runner.mouse_move(Duration::ZERO, x, y);
-        runner.mouse_down(Duration::ZERO, 0);
+        let mut runner =
+            HeadlessRunner::new(RecordingHandler::new()).with_frame_dt(Duration::from_millis(10));
+        runner.wait_for_seconds(0.015);
+        let (x, y) = runner.inspect(|handler| (handler.updates as f32, 20.0));
+        runner.mouse_move(x, y);
+        runner.mouse_down(0);
         runner.snapshot();
 
-        let log = runner.inspect(Duration::ZERO, |handler| handler.log.clone());
+        let log = runner.inspect(|handler| handler.log.clone());
         assert_eq!(
             log.as_slice(),
             [
@@ -371,20 +401,21 @@ mod tests {
                 "update:0.010:false:false",
                 "update:0.010:false:false",
                 "mouse_down:0:2:20",
-                "update:0.010:false:false",
             ]
         );
     }
 
     #[test]
     fn runner_uses_fixed_steps_and_snapshots_after_last_event() {
-        let mut runner = HeadlessRunner::new(RecordingHandler::new());
-        runner.with_frame_dt(Duration::from_millis(10));
-        runner.mouse_move(Duration::from_millis(5), 10.0, 20.0);
-        runner.mouse_down(Duration::from_millis(10), 0);
+        let mut runner =
+            HeadlessRunner::new(RecordingHandler::new()).with_frame_dt(Duration::from_millis(10));
+        runner.wait_for_millis(5);
+        runner.mouse_move(10.0, 20.0);
+        runner.wait_for_millis(10);
+        runner.mouse_down(0);
         let snapshot = runner.snapshot();
 
-        let log = runner.inspect(Duration::ZERO, |handler| handler.log.clone());
+        let log = runner.inspect(|handler| handler.log.clone());
         assert_eq!(
             log.as_slice(),
             [
@@ -392,23 +423,23 @@ mod tests {
                 "update:0.010:false:false",
                 "update:0.010:false:false",
                 "mouse_down:0:10:20",
-                "update:0.010:false:false",
             ]
         );
-        assert_eq!(snapshot.rgba_pixel(2, 3), [70, 80, 90, 255]);
+        assert_eq!(snapshot.rgba_pixel(2, 3), [40, 50, 60, 255]);
     }
 
     #[test]
     fn mouse_click_uses_custom_duration_and_continues_after_release() {
-        let mut runner = HeadlessRunner::new(RecordingHandler::new());
-        runner.with_frame_dt(Duration::from_millis(10));
-        runner.with_press_duration(Duration::from_millis(20));
-        runner.mouse_click(Duration::ZERO, 0);
-        let updates = runner.inspect(Duration::from_millis(5), |handler| handler.updates);
+        let mut runner = HeadlessRunner::new(RecordingHandler::new())
+            .with_frame_dt(Duration::from_millis(10))
+            .with_press_duration(Duration::from_millis(20));
+        runner.mouse_click(0);
+        runner.wait_for_seconds(0.005);
+        let updates = runner.inspect(|handler| handler.updates);
         assert_eq!(updates, 3);
         runner.snapshot();
 
-        let log = runner.inspect(Duration::ZERO, |handler| handler.log.clone());
+        let log = runner.inspect(|handler| handler.log.clone());
         assert_eq!(
             log.as_slice(),
             [
@@ -418,19 +449,18 @@ mod tests {
                 "update:0.010:false:false",
                 "mouse_up:0",
                 "update:0.010:false:false",
-                "update:0.010:false:false",
             ]
         );
     }
 
     #[test]
     fn key_press_uses_default_30ms_duration() {
-        let mut runner = HeadlessRunner::new(RecordingHandler::new());
-        runner.with_frame_dt(Duration::from_millis(10));
-        runner.key_press(Duration::ZERO, KeyCode::A);
+        let mut runner =
+            HeadlessRunner::new(RecordingHandler::new()).with_frame_dt(Duration::from_millis(10));
+        runner.key_press(KeyCode::A);
         runner.snapshot();
 
-        let log = runner.inspect(Duration::ZERO, |handler| handler.log.clone());
+        let log = runner.inspect(|handler| handler.log.clone());
         assert_eq!(
             log.as_slice(),
             [
@@ -440,20 +470,20 @@ mod tests {
                 "update:0.010:true:false",
                 "update:0.010:true:false",
                 &format!("key_up:{}:false:false", KeyCode::A as u8),
-                "update:0.010:false:false",
             ]
         );
     }
 
     #[test]
     fn short_key_press_can_release_before_the_same_update() {
-        let mut runner = HeadlessRunner::new(RecordingHandler::new());
-        runner.with_frame_dt(Duration::from_millis(20));
-        runner.with_press_duration(Duration::from_millis(5));
-        runner.key_press(Duration::from_millis(5), KeyCode::A);
+        let mut runner = HeadlessRunner::new(RecordingHandler::new())
+            .with_frame_dt(Duration::from_millis(20))
+            .with_press_duration(Duration::from_millis(5));
+        runner.wait_for_seconds(0.005);
+        runner.key_press(KeyCode::A);
         runner.snapshot();
 
-        let log = runner.inspect(Duration::ZERO, |handler| handler.log.clone());
+        let log = runner.inspect(|handler| handler.log.clone());
         assert_eq!(
             log.as_slice(),
             [
@@ -461,39 +491,38 @@ mod tests {
                 "update:0.020:false:false",
                 &format!("key_down:{}:false:true", KeyCode::A as u8),
                 &format!("key_up:{}:false:false", KeyCode::A as u8),
-                "update:0.020:false:false",
             ]
         );
     }
 
     #[test]
     fn runner_inspects_internal_state_at_current_time() {
-        let mut runner = HeadlessRunner::new(RecordingHandler::new());
-        runner.with_frame_dt(Duration::from_millis(10));
-        let initial_updates = runner.inspect(Duration::ZERO, |handler| handler.updates);
+        let mut runner =
+            HeadlessRunner::new(RecordingHandler::new()).with_frame_dt(Duration::from_millis(10));
+        let initial_updates = runner.inspect(|handler| handler.updates);
         assert_eq!(initial_updates, 0);
-        let later_updates = runner.inspect(Duration::from_millis(15), |handler| handler.updates);
+        runner.wait_for_seconds(0.015);
+        let later_updates = runner.inspect(|handler| handler.updates);
         assert_eq!(later_updates, 2);
         let snapshot = runner.snapshot();
 
-        let log = runner.inspect(Duration::ZERO, |handler| handler.log.clone());
+        let log = runner.inspect(|handler| handler.log.clone());
         assert_eq!(
             log.as_slice(),
             [
                 "init",
                 "update:0.010:false:false",
                 "update:0.010:false:false",
-                "update:0.010:false:false",
             ]
         );
-        assert_eq!(snapshot.rgba_pixel(2, 3), [70, 80, 90, 255]);
+        assert_eq!(snapshot.rgba_pixel(2, 3), [40, 50, 60, 255]);
     }
 
     #[test]
     fn empty_runner_returns_post_init_snapshot() {
         let mut runner = HeadlessRunner::new(RecordingHandler::new());
         let snapshot = runner.snapshot();
-        let log = runner.inspect(Duration::ZERO, |handler| handler.log.clone());
+        let log = runner.inspect(|handler| handler.log.clone());
         assert_eq!(log.as_slice(), ["init"]);
         assert_eq!(snapshot.rgba_pixel(0, 0), [10, 20, 30, 255]);
     }
@@ -501,24 +530,24 @@ mod tests {
     #[test]
     fn default_frame_dt_is_8ms() {
         let mut runner = HeadlessRunner::new(RecordingHandler::new());
-        runner.inspect(Duration::ZERO, |_handler| {});
+        runner.wait_for_millis(1);
         runner.snapshot();
         runner.snapshot();
-        let log = runner.inspect(Duration::ZERO, |handler| handler.log.clone());
+        let log = runner.inspect(|handler| handler.log.clone());
         assert_eq!(log.as_slice(), ["init", "update:0.008:false:false"]);
     }
 
     #[test]
     fn wait_until_delays_only_the_next_event() {
-        let mut runner = HeadlessRunner::new(RecordingHandler::new());
-        runner.with_frame_dt(Duration::from_millis(10));
-        runner.mouse_move(Duration::ZERO, 10.0, 20.0);
+        let mut runner =
+            HeadlessRunner::new(RecordingHandler::new()).with_frame_dt(Duration::from_millis(10));
+        runner.mouse_move(10.0, 20.0);
         runner.wait_until(Duration::from_millis(25));
         runner.wait_until(Duration::from_millis(10));
-        runner.mouse_down(Duration::ZERO, 0);
+        runner.mouse_down(0);
         runner.snapshot();
 
-        let log = runner.inspect(Duration::ZERO, |handler| handler.log.clone());
+        let log = runner.inspect(|handler| handler.log.clone());
         assert_eq!(
             log.as_slice(),
             [
@@ -527,7 +556,6 @@ mod tests {
                 "update:0.010:false:false",
                 "update:0.010:false:false",
                 "mouse_down:0:10:20",
-                "update:0.010:false:false",
             ]
         );
     }
@@ -535,7 +563,6 @@ mod tests {
     #[test]
     #[should_panic]
     fn zero_frame_dt_is_rejected() {
-        let mut runner = HeadlessRunner::new(RecordingHandler::new());
-        runner.with_frame_dt(Duration::ZERO);
+        HeadlessRunner::new(RecordingHandler::new()).with_frame_dt(Duration::ZERO);
     }
 }

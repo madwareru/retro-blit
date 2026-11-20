@@ -25,9 +25,7 @@ pub fn fill_rectangle(
 
     let mut stride = y * dw;
     for _ in y..(y + h).min(dh) {
-        for px in &mut buffer[stride+left..stride+right] {
-            *px = color;
-        }
+        buffer[stride+left..stride+right].fill(color);
         stride += dw;
     }
 }

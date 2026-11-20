@@ -38,6 +38,17 @@ fn plot_bresenham_circle(
     }
 }
 
+fn plot_bresenham_filled_circle(
+    cx: i16, cy: i16, r: i16,
+    mut plot_func: impl FnMut(i16, i16, i16)
+) {
+    plot_bresenham_circle(cx, cy, r, |x, y| {
+        if x <= cx {
+            plot_func(x, cx + (cx - x), y);
+        }
+    });
+}
+
 fn plot_bresenham_line<F : FnMut(i16, i16) -> ()>(x0: i16, y0: i16, x1: i16, y1: i16, mut plot_func: F) {
     if y0 == y1 {
         for x in x0.min(x1)..=x0.max(x1) { plot_func(x, y0); }
@@ -125,6 +136,27 @@ impl<'a, T: Copy> BresenhamCircleDrawer<'a, T> {
                     return;
                 }
                 self.buffer[x as usize + y as usize * self.buffer_width] = color;
+            }
+        )
+    }
+
+    pub fn fill(self, color: T) {
+        let buffer_height = self.buffer.len() / self.buffer_width;
+        plot_bresenham_filled_circle(
+            self.position.0,
+            self.position.1,
+            self.radius,
+            |left, right, y| {
+                if !(0..buffer_height as i16).contains(&y)
+                    || right < 0
+                    || left >= self.buffer_width as i16
+                {
+                    return;
+                }
+                let left = left.max(0) as usize;
+                let right = right.min(self.buffer_width as i16 - 1) as usize;
+                let row = y as usize * self.buffer_width;
+                self.buffer[row + left..=row + right].fill(color);
             }
         )
     }
@@ -285,5 +317,32 @@ impl<'a, T: Copy> LineRasterizer<'a, T> {
                 }
             }
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BresenhamCircleDrawer;
+    use crate::rendering::blittable::BufferProvider;
+    use crate::rendering::BlittableSurface;
+
+    #[test]
+    fn filled_circle_draws_horizontal_strips() {
+        let mut surface = BlittableSurface::new(7, 5);
+        BresenhamCircleDrawer::create(&mut surface)
+            .with_position((3, 2))
+            .with_radius(2)
+            .fill(1);
+
+        assert_eq!(
+            surface.get_buffer(),
+            &[
+                0, 0, 1, 1, 1, 0, 0,
+                0, 1, 1, 1, 1, 1, 0,
+                0, 1, 1, 1, 1, 1, 0,
+                0, 1, 1, 1, 1, 1, 0,
+                0, 0, 1, 1, 1, 0, 0,
+            ]
+        );
     }
 }
