@@ -535,6 +535,19 @@ pub enum WindowMode {
 }
 
 impl WindowMode {
+    fn get_screen_scale(&self, window_width: u32, window_height: u32) -> [f32; 2] {
+        let window_aspect = window_width as f32 / window_height as f32;
+        if matches!(self, WindowMode::ModeX | WindowMode::Mode13) {
+            return [1.0 / window_aspect, 1.0];
+        }
+        let (render_width, render_height) = self.get_render_texture_dimensions();
+        let display_aspect = render_width as f32 / render_height as f32;
+        [
+            1.0 / window_aspect.max(display_aspect),
+            (window_aspect / display_aspect).min(1.0),
+        ]
+    }
+
     fn get_render_texture_dimensions(&self) -> (usize, usize) {
         match self {
             WindowMode::Mode13 | WindowMode::ModeX => (1600, 1200),

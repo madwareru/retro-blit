@@ -1,5 +1,5 @@
 struct Uniforms {
-    aspect: f32,
+    scale: vec2<f32>,
 };
 
 @group(0) @binding(0)
@@ -16,7 +16,7 @@ fn vs_main(
     @location(1) uv: vec2<f32>,
 ) -> VertexOutput {
     var output: VertexOutput;
-    output.position = vec4<f32>(position.x * uniforms.aspect, position.yzw);
+    output.position = vec4<f32>(position.xy * uniforms.scale, position.zw);
     output.uv = vec2<f32>(uv.x, 1.0 - uv.y);
     return output;
 }

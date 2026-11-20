@@ -25,6 +25,7 @@ struct GpuMesh {
 }
 
 pub(crate) struct Renderer {
+    mode: WindowMode,
     _instance: wgpu::Instance,
     surface: wgpu::Surface<'static>,
     pub(crate) config: wgpu::SurfaceConfiguration,
@@ -42,7 +43,7 @@ pub(crate) struct Renderer {
     mask_pipeline: wgpu::RenderPipeline,
     mask_bind_group: wgpu::BindGroup,
     mask_gpu_mesh: GpuMesh,
-    aspect_buffer: wgpu::Buffer,
+    scale_buffer: wgpu::Buffer,
     msaa_view: wgpu::TextureView,
     texture_uploader: TextureUploader,
     out_of_memory: Arc<AtomicBool>,
@@ -177,9 +178,9 @@ impl Renderer {
             label: Some("linear sampler"),
             ..Default::default()
         });
-        let aspect_buffer = device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("screen aspect"),
-            contents: bytemuck::bytes_of(&1.0f32),
+        let scale_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("screen scale"),
+            contents: bytemuck::bytes_of(&[1.0f32, 1.0f32]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
@@ -259,7 +260,7 @@ impl Renderer {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: aspect_buffer.as_entire_binding(),
+                    resource: scale_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -277,7 +278,7 @@ impl Renderer {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: aspect_buffer.as_entire_binding(),
+                    resource: scale_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -328,6 +329,7 @@ impl Renderer {
         let msaa_view = create_msaa_view(&device, &config);
 
         Self {
+            mode,
             _instance: instance,
             surface,
             config,
@@ -345,7 +347,7 @@ impl Renderer {
             mask_pipeline,
             mask_bind_group,
             mask_gpu_mesh,
-            aspect_buffer,
+            scale_buffer,
             msaa_view,
             texture_uploader: TextureUploader::new(pixels, colors),
             out_of_memory,
@@ -397,9 +399,11 @@ impl Renderer {
         let frame_view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
-        let aspect = self.config.height as f32 / self.config.width as f32;
+        let scale = self
+            .mode
+            .get_screen_scale(self.config.width, self.config.height);
         self.queue
-            .write_buffer(&self.aspect_buffer, 0, bytemuck::bytes_of(&aspect));
+            .write_buffer(&self.scale_buffer, 0, bytemuck::bytes_of(&scale));
 
         let mut encoder = self
             .device

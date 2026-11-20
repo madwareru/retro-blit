@@ -12,7 +12,7 @@ use winit::window::{Window, WindowId};
 use super::egui_integration::EguiIntegration;
 use super::monitor_obj_loader::Vec4;
 use super::renderer::{RenderOutcome, Renderer};
-use super::{ContextHandler, KeyCode, KeyMods, RetroBlitContext};
+use super::{ContextHandler, KeyCode, KeyMods, RetroBlitContext, WindowMode};
 use crate::math_utils::Barycentric2D;
 
 pub(crate) struct App<CtxHandler: ContextHandler> {
@@ -26,6 +26,22 @@ pub(crate) struct App<CtxHandler: ContextHandler> {
     cursor_position: PhysicalPosition<f64>,
     modifiers: ModifiersState,
     last_instant: Instant,
+}
+
+fn screen_coordinates(
+    mode: WindowMode,
+    width: u32,
+    height: u32,
+    position: PhysicalPosition<f64>,
+) -> (f32, f32) {
+    let window_aspect = width as f32 / height as f32;
+    let x = (position.x as f32 / width as f32 - 0.5) * 2.0 * window_aspect;
+    let y = -((position.y as f32 / height as f32 - 0.5) * 2.0);
+    if matches!(mode, WindowMode::ModeX | WindowMode::Mode13) {
+        return (x, y);
+    }
+    let scale = mode.get_screen_scale(width, height);
+    (x / (window_aspect * scale[0]), y / scale[1])
 }
 
 impl<CtxHandler: ContextHandler> App<CtxHandler> {
@@ -54,9 +70,12 @@ impl<CtxHandler: ContextHandler> App<CtxHandler> {
         if size.width == 0 || size.height == 0 {
             return;
         }
-        let aspect = size.width as f32 / size.height as f32;
-        let x = (position.x as f32 / size.width as f32 - 0.5) * 2.0 * aspect;
-        let y = -((position.y as f32 / size.height as f32 - 0.5) * 2.0);
+        let (x, y) = screen_coordinates(
+            self.handler.get_window_mode(),
+            size.width,
+            size.height,
+            position,
+        );
         self.check_for_hit_test(x, y);
     }
 
@@ -334,6 +353,87 @@ mod tests {
 
     fn assert_close(actual: f32, expected: f32) {
         assert!((actual - expected).abs() < 0.001, "expected {}, got {}", expected, actual);
+    }
+
+    #[test]
+    fn flat_screen_scale_fits_both_window_axes() {
+        let cases = [
+            (WindowMode::Mode64x64, 1600, 900, [0.5625, 1.0]),
+            (WindowMode::Mode64x64, 900, 1600, [1.0, 0.5625]),
+            (WindowMode::Mode64x64, 900, 900, [1.0, 1.0]),
+            (WindowMode::ModeXFrameless, 1600, 900, [0.5625, 1.0]),
+            (WindowMode::ModeXFrameless, 900, 1600, [0.75, 0.421875]),
+            (WindowMode::ModeXFrameless, 1200, 900, [0.75, 1.0]),
+            (WindowMode::Mode240x150, 1600, 900, [0.5625, 1.0]),
+            (WindowMode::Mode240x150, 900, 1600, [0.625, 0.3515625]),
+            (WindowMode::Mode240x150, 1600, 1000, [0.625, 1.0]),
+        ];
+        for (mode, width, height, expected) in cases.iter().copied() {
+            let scale = mode.get_screen_scale(width, height);
+            assert_close(scale[0], expected[0]);
+            assert_close(scale[1], expected[1]);
+        }
+
+        for (width, height) in [(1600, 900), (900, 1600)].iter().copied() {
+            let scale = WindowMode::Mode13.get_screen_scale(width, height);
+            assert_close(scale[0], height as f32 / width as f32);
+            assert_close(scale[1], 1.0);
+        }
+    }
+
+    #[test]
+    fn flat_mouse_mapping_matches_contained_screen() {
+        let cases = [
+            (WindowMode::Mode64x64, 350.0, 1250.0, 350.0, 1250.0),
+            (WindowMode::ModeXFrameless, 200.0, 1400.0, 462.5, 1137.5),
+            (WindowMode::Mode240x150, 80.0, 1520.0, 518.75, 1081.25),
+        ];
+        for (mode, wide_left, wide_right, tall_top, tall_bottom) in cases.iter().copied() {
+            let (buffer_width, buffer_height) = mode.get_buffer_dimensions();
+            let mut app = App::new(
+                TestHandler(mode),
+                buffer_width as u32,
+                buffer_height as u32,
+            );
+            let mut check = |window_width, window_height, x, y| {
+                let (x, y) = screen_coordinates(
+                    mode,
+                    window_width,
+                    window_height,
+                    PhysicalPosition::new(x, y),
+                );
+                app.check_for_hit_test(x, y);
+                (app.context_data.mouse_x, app.context_data.mouse_y)
+            };
+
+            for x in [0.0, wide_left].iter().copied() {
+                let (mouse_x, mouse_y) = check(1600, 900, x, 450.0);
+                assert_close(mouse_x, 0.0);
+                assert_close(mouse_y, buffer_height as f32 / 2.0);
+            }
+            for x in [wide_right, 1600.0].iter().copied() {
+                let (mouse_x, mouse_y) = check(1600, 900, x, 450.0);
+                assert_close(mouse_x, buffer_width as f32);
+                assert_close(mouse_y, buffer_height as f32 / 2.0);
+            }
+            let (mouse_x, mouse_y) = check(1600, 900, 800.0, 450.0);
+            assert_close(mouse_x, buffer_width as f32 / 2.0);
+            assert_close(mouse_y, buffer_height as f32 / 2.0);
+
+            for y in [0.0, tall_top].iter().copied() {
+                let (mouse_x, mouse_y) = check(900, 1600, 450.0, y);
+                assert_close(mouse_x, buffer_width as f32 / 2.0);
+                assert_close(mouse_y, 0.0);
+            }
+            for y in [tall_bottom, 1600.0].iter().copied() {
+                let (mouse_x, mouse_y) = check(900, 1600, 450.0, y);
+                assert_close(mouse_x, buffer_width as f32 / 2.0);
+                assert_close(mouse_y, buffer_height as f32);
+            }
+            let (mouse_x, mouse_y) = check(900, 1600, 450.0, 800.0);
+            assert_close(mouse_x, buffer_width as f32 / 2.0);
+            assert_close(mouse_y, buffer_height as f32 / 2.0);
+        }
     }
 
     #[test]
